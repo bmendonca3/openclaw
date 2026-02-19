@@ -4,7 +4,10 @@ import type { OpenClawConfig } from "../config/types.js";
 const DEFAULT_GATEWAY_PORT = 18789;
 
 function isLoopbackHost(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase();
+  const normalized = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (!normalized) {
     return false;
   }
@@ -13,6 +16,7 @@ function isLoopbackHost(hostname: string): boolean {
     normalized === "127.0.0.1" ||
     normalized.startsWith("127.") ||
     normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
     normalized.startsWith("::ffff:127.")
   );
 }
