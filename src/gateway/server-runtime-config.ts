@@ -9,6 +9,7 @@ import {
   type ResolvedGatewayAuth,
   resolveGatewayAuth,
 } from "./auth.js";
+import { isTruthyEnvValue } from "../infra/env.js";
 import { normalizeControlUiBasePath } from "./control-ui-shared.js";
 import { resolveHooksConfig } from "./hooks.js";
 import {
@@ -72,6 +73,8 @@ export async function resolveGatewayRuntimeConfig(params: {
   }
   const controlUiEnabled =
     params.controlUiEnabled ?? params.cfg.gateway?.controlUi?.enabled ?? true;
+  const controlUiDisablesDeviceAuth =
+    params.cfg.gateway?.controlUi?.dangerouslyDisableDeviceAuth === true;
   const openAiChatCompletionsEnabled =
     params.openAiChatCompletionsEnabled ??
     params.cfg.gateway?.http?.endpoints?.chatCompletions?.enabled ??
@@ -105,6 +108,18 @@ export async function resolveGatewayRuntimeConfig(params: {
     process.env.OPENCLAW_SKIP_CANVAS_HOST !== "1" && params.cfg.canvasHost?.enabled !== false;
 
   const trustedProxies = params.cfg.gateway?.trustedProxies ?? [];
+
+  if (
+    controlUiEnabled &&
+    controlUiDisablesDeviceAuth &&
+    !isTruthyEnvValue(process.env.OPENCLAW_UNSAFE_ALLOW_CONTROL_UI_BYPASS)
+  ) {
+    throw new Error(
+      "refusing to start gateway with insecure Control UI bypass flags " +
+        "(gateway.controlUi.dangerouslyDisableDeviceAuth). " +
+        "Set OPENCLAW_UNSAFE_ALLOW_CONTROL_UI_BYPASS=1 only for short-lived break-glass use.",
+    );
+  }
 
   assertGatewayAuthConfigured(resolvedAuth);
   if (tailscaleMode === "funnel" && authMode !== "password") {
