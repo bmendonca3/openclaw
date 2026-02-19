@@ -5,6 +5,7 @@ import type {
   loadConfig,
 } from "../config/config.js";
 import { isTruthyEnvValue } from "../infra/env.js";
+import { DEFAULT_GATEWAY_HTTP_TOOL_DENY } from "../security/dangerous-tools.js";
 import {
   assertGatewayAuthConfigured,
   type ResolvedGatewayAuth,
@@ -68,10 +69,9 @@ export async function resolveGatewayRuntimeConfig(params: {
   }
   const controlUiEnabled =
     params.controlUiEnabled ?? params.cfg.gateway?.controlUi?.enabled ?? true;
-  const controlUiAllowsInsecureAuth = params.cfg.gateway?.controlUi?.allowInsecureAuth === true;
   const controlUiDisablesDeviceAuth =
     params.cfg.gateway?.controlUi?.dangerouslyDisableDeviceAuth === true;
-  const controlUiBypassEnabled = controlUiAllowsInsecureAuth || controlUiDisablesDeviceAuth;
+  const controlUiBypassEnabled = controlUiDisablesDeviceAuth;
   const openAiChatCompletionsEnabled =
     params.openAiChatCompletionsEnabled ??
     params.cfg.gateway?.http?.endpoints?.chatCompletions?.enabled ??
@@ -105,6 +105,27 @@ export async function resolveGatewayRuntimeConfig(params: {
     process.env.OPENCLAW_SKIP_CANVAS_HOST !== "1" && params.cfg.canvasHost?.enabled !== false;
 
   const trustedProxies = params.cfg.gateway?.trustedProxies ?? [];
+  const gatewayToolsAllow = new Set(
+    (params.cfg.gateway?.tools?.allow ?? [])
+      .map((entry) => (typeof entry === "string" ? entry.trim().toLowerCase() : ""))
+      .filter(Boolean),
+  );
+  const dangerousHttpToolsReenabled = DEFAULT_GATEWAY_HTTP_TOOL_DENY.filter((name) =>
+    gatewayToolsAllow.has(name),
+  );
+
+  const gatewayHttpInvokeExposed = !isLoopbackHost(bindHost) || tailscaleMode !== "off";
+  if (
+    dangerousHttpToolsReenabled.length > 0 &&
+    gatewayHttpInvokeExposed &&
+    !isTruthyEnvValue(process.env.OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS)
+  ) {
+    throw new Error(
+      "refusing to start gateway with dangerous HTTP /tools/invoke tool re-enables " +
+        `(${dangerousHttpToolsReenabled.join(", ")}). ` +
+        "Unset gateway.tools.allow entries or set OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS=1 for short-lived break-glass use.",
+    );
+  }
 
   if (
     controlUiEnabled &&
