@@ -322,9 +322,10 @@ describe("verifyTwilioWebhook", () => {
         rawBody: postBody,
         url: "http://localhost:3000/voice/webhook",
         method: "POST",
+        remoteAddress: "203.0.113.10",
       },
       authToken,
-      { allowedHosts: ["myapp.ngrok.io"] },
+      { allowedHosts: ["myapp.ngrok.io"], trustedProxyIPs: ["203.0.113.10"] },
     );
 
     expect(result.ok).toBe(true);
@@ -345,14 +346,43 @@ describe("verifyTwilioWebhook", () => {
         rawBody: postBody,
         url: "http://localhost:3000/voice/webhook",
         method: "POST",
+        remoteAddress: "203.0.113.10",
       },
       authToken,
-      { allowedHosts: ["myapp.ngrok.io", "webhook.example.com"] },
+      {
+        allowedHosts: ["myapp.ngrok.io", "webhook.example.com"],
+        trustedProxyIPs: ["203.0.113.10"],
+      },
     );
 
     expect(result.ok).toBe(false);
     // Attacker's host not in whitelist, falls back to Host header
     expect(result.verificationUrl).toBe("https://localhost/voice/webhook");
+  });
+
+  it("ignores allowedHosts forwarding when trustedProxyIPs are not configured", () => {
+    const authToken = "test-auth-token";
+    const postBody = "CallSid=CS123&CallStatus=completed&From=%2B15550000000";
+
+    const result = verifyTwilioWebhook(
+      {
+        headers: {
+          host: "legitimate.example.com",
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": "myapp.ngrok.io",
+          "x-twilio-signature": "invalid",
+        },
+        rawBody: postBody,
+        url: "http://localhost:3000/voice/webhook",
+        method: "POST",
+        remoteAddress: "203.0.113.10",
+      },
+      authToken,
+      { allowedHosts: ["myapp.ngrok.io"] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.verificationUrl).toBe("https://legitimate.example.com/voice/webhook");
   });
 
   it("trusts forwarding headers only from trusted proxy IPs", () => {
