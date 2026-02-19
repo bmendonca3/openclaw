@@ -53,7 +53,7 @@ export async function startBrowserControlServerFromConfig(): Promise<BrowserServ
       return null;
     }
     logServer.warn(
-      "SECURITY WARNING: starting browser control without auth due OPENCLAW_UNSAFE_ALLOW_BROWSER_CONTROL_NO_AUTH=1.",
+      "SECURITY WARNING: starting browser control without auth due to OPENCLAW_UNSAFE_ALLOW_BROWSER_CONTROL_NO_AUTH=1.",
     );
   }
 
