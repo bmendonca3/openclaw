@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import http from "node:http";
 import { URL } from "node:url";
 import {
@@ -18,6 +19,8 @@ import type { NormalizedEvent, WebhookContext } from "./types.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
 const BAD_REQUEST_UPGRADE_RESPONSE = "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n";
+const WEBHOOK_REPLAY_WINDOW_MS = 5 * 60_000;
+const WEBHOOK_REPLAY_MAX_KEYS = 5_000;
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) {
@@ -66,6 +69,7 @@ export class VoiceCallWebhookServer {
   private provider: VoiceCallProvider;
   private coreConfig: CoreConfig | null;
   private staleCallReaperInterval: ReturnType<typeof setInterval> | null = null;
+  private recentReplayKeys = new Map<string, number>();
 
   /** Media stream handler for bidirectional audio (when streaming enabled) */
   private mediaStreamHandler: MediaStreamHandler | null = null;
@@ -387,16 +391,23 @@ export class VoiceCallWebhookServer {
       return;
     }
 
+    const replayKey = this.buildReplayKey(ctx);
+    const isReplay = replayKey ? this.shouldDropReplayWebhook(replayKey, Date.now()) : false;
+
     // Parse events
     const result = this.provider.parseWebhookEvent(ctx);
 
     // Process each event
-    for (const event of result.events) {
-      try {
-        this.manager.processEvent(event);
-      } catch (err) {
-        console.error(`[voice-call] Error processing event ${event.type}:`, err);
+    if (!isReplay) {
+      for (const event of result.events) {
+        try {
+          this.manager.processEvent(event);
+        } catch (err) {
+          console.error(`[voice-call] Error processing event ${event.type}:`, err);
+        }
       }
+    } else {
+      console.warn("[voice-call] Replay webhook dropped after successful signature verification");
     }
 
     // Send response
@@ -420,6 +431,67 @@ export class VoiceCallWebhookServer {
     timeoutMs = 30_000,
   ): Promise<string> {
     return readRequestBodyWithLimit(req, { maxBytes, timeoutMs });
+  }
+
+  private getHeaderValue(ctx: WebhookContext, name: string): string | null {
+    const value = ctx.headers[name.toLowerCase()];
+    if (!value) {
+      return null;
+    }
+    if (Array.isArray(value)) {
+      const first = value[0]?.trim();
+      return first || null;
+    }
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  private buildReplayKey(ctx: WebhookContext): string | null {
+    const telnyxSignature = this.getHeaderValue(ctx, "telnyx-signature-ed25519");
+    const telnyxTimestamp = this.getHeaderValue(ctx, "telnyx-timestamp");
+    if (telnyxSignature && telnyxTimestamp) {
+      return `${this.provider.name}:telnyx:${telnyxTimestamp}:${telnyxSignature}`;
+    }
+
+    const plivoV3Signature = this.getHeaderValue(ctx, "x-plivo-signature-v3");
+    const plivoV3Nonce = this.getHeaderValue(ctx, "x-plivo-signature-v3-nonce");
+    if (plivoV3Signature && plivoV3Nonce) {
+      return `${this.provider.name}:plivo:v3:${plivoV3Nonce}:${plivoV3Signature}`;
+    }
+
+    const plivoV2Signature = this.getHeaderValue(ctx, "x-plivo-signature-v2");
+    const plivoV2Nonce = this.getHeaderValue(ctx, "x-plivo-signature-v2-nonce");
+    if (plivoV2Signature && plivoV2Nonce) {
+      return `${this.provider.name}:plivo:v2:${plivoV2Nonce}:${plivoV2Signature}`;
+    }
+
+    const twilioSignature = this.getHeaderValue(ctx, "x-twilio-signature");
+    const twilioIdempotencyToken = this.getHeaderValue(ctx, "i-twilio-idempotency-token");
+    if (twilioSignature && twilioIdempotencyToken) {
+      return `${this.provider.name}:twilio:${twilioIdempotencyToken}:${twilioSignature}`;
+    }
+
+    return null;
+  }
+
+  private shouldDropReplayWebhook(replayKey: string, nowMs: number): boolean {
+    const replayFingerprint = crypto.createHash("sha256").update(replayKey).digest("hex");
+    const seenAt = this.recentReplayKeys.get(replayFingerprint);
+    this.recentReplayKeys.set(replayFingerprint, nowMs);
+
+    if (typeof seenAt === "number" && nowMs - seenAt < WEBHOOK_REPLAY_WINDOW_MS) {
+      return true;
+    }
+
+    if (this.recentReplayKeys.size > WEBHOOK_REPLAY_MAX_KEYS) {
+      for (const [key, timestamp] of this.recentReplayKeys) {
+        if (nowMs - timestamp >= WEBHOOK_REPLAY_WINDOW_MS) {
+          this.recentReplayKeys.delete(key);
+        }
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -484,114 +556,50 @@ function runTailscaleCommand(
   timeoutMs = 2500,
 ): Promise<{ code: number; stdout: string }> {
   return new Promise((resolve) => {
-    const proc = spawn("tailscale", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
     let stdout = "";
-    proc.stdout.on("data", (data) => {
-      stdout += data;
-    });
-
-    const timer = setTimeout(() => {
-      proc.kill("SIGKILL");
-      resolve({ code: -1, stdout: "" });
+    const child = spawn("tailscale", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const timeout = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // ignore
+      }
     }, timeoutMs);
 
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ code: code ?? -1, stdout });
+    child.stdout.on("data", (d) => {
+      stdout += String(d);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      resolve({ code: code ?? 1, stdout });
+    });
+    child.on("error", () => {
+      clearTimeout(timeout);
+      resolve({ code: 1, stdout: "" });
     });
   });
 }
 
-export async function getTailscaleSelfInfo(): Promise<TailscaleSelfInfo | null> {
-  const { code, stdout } = await runTailscaleCommand(["status", "--json"]);
-  if (code !== 0) {
-    return null;
-  }
-
+/**
+ * Best-effort Tailscale self identity lookup.
+ */
+export async function getTailscaleSelfInfo(): Promise<TailscaleSelfInfo> {
   try {
-    const status = JSON.parse(stdout);
-    return {
-      dnsName: status.Self?.DNSName?.replace(/\.$/, "") || null,
-      nodeId: status.Self?.ID || null,
-    };
+    const st = await runTailscaleCommand(["status", "--json"]);
+    if (st.code === 0 && st.stdout) {
+      const parsed = JSON.parse(st.stdout) as unknown;
+      if (parsed && typeof parsed === "object") {
+        const obj = parsed as { Self?: { DNSName?: string; ID?: string } };
+        const dnsName = obj.Self?.DNSName ?? null;
+        const nodeId = obj.Self?.ID ?? null;
+        if (dnsName || nodeId) {
+          return { dnsName, nodeId };
+        }
+      }
+    }
   } catch {
-    return null;
-  }
-}
-
-export async function getTailscaleDnsName(): Promise<string | null> {
-  const info = await getTailscaleSelfInfo();
-  return info?.dnsName ?? null;
-}
-
-export async function setupTailscaleExposureRoute(opts: {
-  mode: "serve" | "funnel";
-  path: string;
-  localUrl: string;
-}): Promise<string | null> {
-  const dnsName = await getTailscaleDnsName();
-  if (!dnsName) {
-    console.warn("[voice-call] Could not get Tailscale DNS name");
-    return null;
+    // ignore
   }
 
-  const { code } = await runTailscaleCommand([
-    opts.mode,
-    "--bg",
-    "--yes",
-    "--set-path",
-    opts.path,
-    opts.localUrl,
-  ]);
-
-  if (code === 0) {
-    const publicUrl = `https://${dnsName}${opts.path}`;
-    console.log(`[voice-call] Tailscale ${opts.mode} active: ${publicUrl}`);
-    return publicUrl;
-  }
-
-  console.warn(`[voice-call] Tailscale ${opts.mode} failed`);
-  return null;
-}
-
-export async function cleanupTailscaleExposureRoute(opts: {
-  mode: "serve" | "funnel";
-  path: string;
-}): Promise<void> {
-  await runTailscaleCommand([opts.mode, "off", opts.path]);
-}
-
-/**
- * Setup Tailscale serve/funnel for the webhook server.
- * This is a helper that shells out to `tailscale serve` or `tailscale funnel`.
- */
-export async function setupTailscaleExposure(config: VoiceCallConfig): Promise<string | null> {
-  if (config.tailscale.mode === "off") {
-    return null;
-  }
-
-  const mode = config.tailscale.mode === "funnel" ? "funnel" : "serve";
-  // Include the path suffix so tailscale forwards to the correct endpoint
-  // (tailscale strips the mount path prefix when proxying)
-  const localUrl = `http://127.0.0.1:${config.serve.port}${config.serve.path}`;
-  return setupTailscaleExposureRoute({
-    mode,
-    path: config.tailscale.path,
-    localUrl,
-  });
-}
-
-/**
- * Cleanup Tailscale serve/funnel.
- */
-export async function cleanupTailscaleExposure(config: VoiceCallConfig): Promise<void> {
-  if (config.tailscale.mode === "off") {
-    return;
-  }
-
-  const mode = config.tailscale.mode === "funnel" ? "funnel" : "serve";
-  await cleanupTailscaleExposureRoute({ mode, path: config.tailscale.path });
+  return { dnsName: null, nodeId: null };
 }
