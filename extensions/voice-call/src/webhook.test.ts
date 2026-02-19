@@ -1,4 +1,4 @@
-import type http from "node:http";
+import net from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { VoiceCallConfigSchema, type VoiceCallConfig } from "./config.js";
 import type { CallManager } from "./manager.js";
@@ -55,13 +55,91 @@ const createManager = (calls: CallRecord[]) => {
 };
 
 const getListeningPort = (server: VoiceCallWebhookServer): number => {
-  const internalServer = (server as unknown as { server: http.Server | null }).server;
-  const address = internalServer?.address();
-  if (!address || typeof address === "string") {
-    throw new Error("Webhook server is not listening");
+  const listeningServer = (server as unknown as { server?: { address?: () => unknown } }).server;
+  const address = listeningServer?.address?.() as { port?: number } | string | null | undefined;
+  if (!address || typeof address === "string" || typeof address.port !== "number") {
+    throw new Error("webhook server did not expose a listen address");
   }
   return address.port;
 };
+
+async function sendRawUpgrade(params: {
+  host: string;
+  port: number;
+  path: string;
+  hostHeader: string;
+}): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: params.host, port: params.port });
+    socket.setEncoding("utf8");
+    socket.setTimeout(2000);
+
+    let response = "";
+
+    socket.on("connect", () => {
+      socket.write(
+        `GET ${params.path} HTTP/1.1\r\n` +
+          `Host: ${params.hostHeader}\r\n` +
+          "Connection: Upgrade\r\n" +
+          "Upgrade: websocket\r\n" +
+          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+          "Sec-WebSocket-Version: 13\r\n" +
+          "\r\n",
+      );
+    });
+
+    socket.on("data", (chunk) => {
+      response += chunk;
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy(new Error("upgrade request timed out"));
+    });
+
+    socket.on("error", reject);
+    socket.on("close", () => resolve(response));
+  });
+}
+
+async function sendRawPost(params: {
+  host: string;
+  port: number;
+  path: string;
+  hostHeader: string;
+  body: string;
+}): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: params.host, port: params.port });
+    socket.setEncoding("utf8");
+    socket.setTimeout(2000);
+
+    let response = "";
+
+    socket.on("connect", () => {
+      const contentLength = Buffer.byteLength(params.body, "utf8");
+      socket.write(
+        `POST ${params.path} HTTP/1.1\r\n` +
+          `Host: ${params.hostHeader}\r\n` +
+          "Content-Type: application/x-www-form-urlencoded\r\n" +
+          `Content-Length: ${contentLength}\r\n` +
+          "Connection: close\r\n" +
+          "\r\n" +
+          params.body,
+      );
+    });
+
+    socket.on("data", (chunk) => {
+      response += chunk;
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy(new Error("post request timed out"));
+    });
+
+    socket.on("error", reject);
+    socket.on("close", () => resolve(response));
+  });
+}
 
 describe("VoiceCallWebhookServer stale call reaper", () => {
   beforeEach(() => {
@@ -161,6 +239,90 @@ describe("VoiceCallWebhookServer request path checks", () => {
         body: "CallSid=CA123",
       });
       expect(response.status).toBe(404);
+    } finally {
+      await server.stop();
+    }
+  });
+});
+
+describe("VoiceCallWebhookServer websocket upgrade hardening", () => {
+  it("rejects malformed host headers without crashing the process", async () => {
+    const baseConfig = createConfig();
+    const config: VoiceCallConfig = {
+      ...baseConfig,
+      staleCallReaperSeconds: 0,
+      streaming: {
+        ...baseConfig.streaming,
+        enabled: true,
+        openaiApiKey: "test-openai-key",
+      },
+    };
+
+    const manager = {
+      getActiveCalls: () => [],
+      endCall: vi.fn(async () => ({ success: true })),
+      getCallByProviderCallId: vi.fn(() => undefined),
+      getCall: vi.fn(() => undefined),
+      processEvent: vi.fn(),
+      speakInitialMessage: vi.fn(async () => {}),
+      speak: vi.fn(async () => {}),
+    } as unknown as CallManager;
+
+    const server = new VoiceCallWebhookServer(config, manager, provider);
+
+    try {
+      await server.start();
+      const port = getListeningPort(server);
+      const webhookUrl = `http://${config.serve.bind}:${port}${config.serve.path}`;
+
+      const upgradeResponse = await sendRawUpgrade({
+        host: config.serve.bind,
+        port,
+        path: config.streaming.streamPath,
+        hostHeader: "[::1",
+      });
+
+      expect(upgradeResponse).toContain("400 Bad Request");
+
+      // Ensure malformed upgrade requests do not take down the webhook server.
+      const healthyRes = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "event=health-check",
+      });
+      expect(healthyRes.status).toBe(200);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("rejects malformed host headers on POST requests and keeps serving healthy traffic", async () => {
+    const { manager } = createManager([]);
+    const config = createConfig({ serve: { port: 0, bind: "127.0.0.1", path: "/voice/webhook" } });
+    const server = new VoiceCallWebhookServer(config, manager, provider);
+
+    try {
+      await server.start();
+      const port = getListeningPort(server);
+      const badPostResponse = await sendRawPost({
+        host: config.serve.bind,
+        port,
+        path: config.serve.path,
+        hostHeader: "[::1",
+        body: "CallSid=CA123",
+      });
+
+      expect(badPostResponse).toContain("400 Bad Request");
+
+      const healthyResponse = await fetch(
+        `http://${config.serve.bind}:${port}${config.serve.path}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "CallSid=CA123",
+        },
+      );
+      expect(healthyResponse.status).toBe(200);
     } finally {
       await server.stop();
     }
