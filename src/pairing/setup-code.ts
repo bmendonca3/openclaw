@@ -3,6 +3,39 @@ import type { OpenClawConfig } from "../config/types.js";
 
 const DEFAULT_GATEWAY_PORT = 18789;
 
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized.startsWith("127.") ||
+    normalized === "::1" ||
+    normalized.startsWith("::ffff:127.")
+  );
+}
+
+function validateTransportSecurity(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol === "wss:") {
+      return null;
+    }
+    if (protocol !== "ws:") {
+      return "Gateway URL must use ws:// or wss://.";
+    }
+    if (isLoopbackHost(parsed.hostname)) {
+      return null;
+    }
+    return "Refusing to generate setup code with insecure ws:// for non-loopback host. Use wss://.";
+  } catch {
+    return "Gateway URL is invalid.";
+  }
+}
+
 export type PairingSetupPayload = {
   url: string;
   token?: string;
@@ -377,6 +410,10 @@ export async function resolvePairingSetupFromConfig(
 
   if (!urlResult.url) {
     return { ok: false, error: urlResult.error ?? "Gateway URL unavailable." };
+  }
+  const transportError = validateTransportSecurity(urlResult.url);
+  if (transportError) {
+    return { ok: false, error: transportError };
   }
 
   if (!auth.label) {
