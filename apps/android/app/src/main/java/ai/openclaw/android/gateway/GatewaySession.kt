@@ -191,6 +191,9 @@ class GatewaySession(
       }
 
     suspend fun connect() {
+      if (tls == null && !isLoopbackHost(endpoint.host)) {
+        throw IllegalStateException("non-loopback gateway connections require TLS")
+      }
       val scheme = if (tls != null) "wss" else "ws"
       val url = "$scheme://${endpoint.host}:${endpoint.port}"
       val httpScheme = if (tls != null) "https" else "http"
