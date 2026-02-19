@@ -186,4 +186,24 @@ describe("pairing setup code", () => {
       urlSource: "gateway.remote.url",
     });
   });
+
+  it("allows IPv6 loopback ws:// URLs", async () => {
+    const resolved = await resolvePairingSetupFromConfig({
+      gateway: {
+        remote: { url: "ws://[0:0:0:0:0:0:0:1]:18789" },
+        auth: { mode: "token", token: "tok_123" },
+      },
+    });
+
+    expect(resolved).toEqual({
+      ok: true,
+      payload: {
+        url: "ws://[::1]:18789",
+        token: "tok_123",
+        password: undefined,
+      },
+      authLabel: "token",
+      urlSource: "gateway.remote.url",
+    });
+  });
 });
