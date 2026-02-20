@@ -113,17 +113,31 @@ export async function resolveGatewayRuntimeConfig(params: {
   const dangerousHttpToolsReenabled = DEFAULT_GATEWAY_HTTP_TOOL_DENY.filter((name) =>
     gatewayToolsAllow.has(name),
   );
+  const allowDangerousToolsBreakGlass = isTruthyEnvValue(
+    process.env.OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS,
+  );
 
   const gatewayHttpInvokeExposed = !isLoopbackHost(bindHost) || tailscaleMode !== "off";
   if (
     dangerousHttpToolsReenabled.length > 0 &&
     gatewayHttpInvokeExposed &&
-    !isTruthyEnvValue(process.env.OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS)
+    !allowDangerousToolsBreakGlass
   ) {
     throw new Error(
       "refusing to start gateway with dangerous HTTP /tools/invoke tool re-enables " +
         `(${dangerousHttpToolsReenabled.join(", ")}). ` +
         "Unset gateway.tools.allow entries or set OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS=1 for short-lived break-glass use.",
+    );
+  }
+  if (
+    dangerousHttpToolsReenabled.length > 0 &&
+    !gatewayHttpInvokeExposed &&
+    !allowDangerousToolsBreakGlass
+  ) {
+    console.warn(
+      "gateway.tools.allow re-enabled dangerous /tools/invoke tools " +
+        `(${dangerousHttpToolsReenabled.join(", ")}) on loopback-only bind. ` +
+        "Use OPENCLAW_UNSAFE_ALLOW_GATEWAY_HTTP_DANGEROUS_TOOLS=1 for temporary break-glass acknowledgement.",
     );
   }
 
@@ -134,7 +148,7 @@ export async function resolveGatewayRuntimeConfig(params: {
   ) {
     throw new Error(
       "refusing to start gateway with insecure Control UI bypass flags " +
-        "(gateway.controlUi.allowInsecureAuth / gateway.controlUi.dangerouslyDisableDeviceAuth). " +
+        "(gateway.controlUi.dangerouslyDisableDeviceAuth). " +
         "Set OPENCLAW_UNSAFE_ALLOW_CONTROL_UI_BYPASS=1 only for short-lived break-glass use.",
     );
   }
