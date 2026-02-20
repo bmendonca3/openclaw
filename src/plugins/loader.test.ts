@@ -25,9 +25,10 @@ function writePlugin(params: {
   filename?: string;
 }): TempPlugin {
   const dir = params.dir ?? makeTempDir();
-  const filename = params.filename ?? `${params.id}.js`;
+  const filename = params.filename ?? `${params.id}.cjs`;
   const file = path.join(dir, filename);
-  fs.writeFileSync(file, params.body, "utf-8");
+  const pluginBody = params.body.replace(/\bexport default\b/, "module.exports =");
+  fs.writeFileSync(file, pluginBody, "utf-8");
   fs.writeFileSync(
     path.join(dir, "openclaw.plugin.json"),
     JSON.stringify(
@@ -50,11 +51,11 @@ function loadBundledMemoryPluginRegistry(options?: {
 }) {
   const bundledDir = makeTempDir();
   let pluginDir = bundledDir;
-  let pluginFilename = options?.pluginFilename ?? "memory-core.js";
+  let pluginFilename = options?.pluginFilename ?? "memory-core.cjs";
 
   if (options?.packageMeta) {
     pluginDir = path.join(bundledDir, "memory-core");
-    pluginFilename = "index.js";
+    pluginFilename = "index.cjs";
     fs.mkdirSync(pluginDir, { recursive: true });
     fs.writeFileSync(
       path.join(pluginDir, "package.json"),
@@ -63,7 +64,7 @@ function loadBundledMemoryPluginRegistry(options?: {
           name: options.packageMeta.name,
           version: options.packageMeta.version,
           description: options.packageMeta.description,
-          openclaw: { extensions: ["./index.js"] },
+          openclaw: { extensions: ["./index.cjs"] },
         },
         null,
         2,
@@ -116,7 +117,7 @@ describe("loadOpenClawPlugins", () => {
       id: "bundled",
       body: `export default { id: "bundled", register() {} };`,
       dir: bundledDir,
-      filename: "bundled.js",
+      filename: "bundled.cjs",
     });
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
 
@@ -173,7 +174,7 @@ describe("loadOpenClawPlugins", () => {
   });
 	} };`,
       dir: bundledDir,
-      filename: "telegram.js",
+      filename: "telegram.cjs",
     });
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
 
@@ -462,7 +463,7 @@ describe("loadOpenClawPlugins", () => {
       id: "shadow",
       body: `export default { id: "shadow", register() {} };`,
       dir: bundledDir,
-      filename: "shadow.js",
+      filename: "shadow.cjs",
     });
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = bundledDir;
 
@@ -526,7 +527,7 @@ describe("loadOpenClawPlugins", () => {
         id: "rogue",
         body: `export default { id: "rogue", register() {} };`,
         dir: globalDir,
-        filename: "index.js",
+        filename: "index.cjs",
       });
 
       const warnings: string[] = [];
@@ -565,11 +566,11 @@ describe("loadOpenClawPlugins", () => {
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
     const pluginDir = makeTempDir();
     const outsideDir = makeTempDir();
-    const outsideEntry = path.join(outsideDir, "outside.js");
-    const linkedEntry = path.join(pluginDir, "entry.js");
+    const outsideEntry = path.join(outsideDir, "outside.cjs");
+    const linkedEntry = path.join(pluginDir, "entry.cjs");
     fs.writeFileSync(
       outsideEntry,
-      'export default { id: "symlinked", register() { throw new Error("should not run"); } };',
+      'module.exports = { id: "symlinked", register() { throw new Error("should not run"); } };',
       "utf-8",
     );
     fs.writeFileSync(
