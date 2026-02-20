@@ -32,7 +32,8 @@ class ConnectionManager(
       if (host.isEmpty()) return false
       if (host == "localhost") return true
       if (host == "::1") return true
-      if (host == "0.0.0.0" || host == "::") return true
+      if (host == "0:0:0:0:0:0:0:1") return true
+      if (host.startsWith("::ffff:127.")) return true
       return host.startsWith("127.")
     }
 

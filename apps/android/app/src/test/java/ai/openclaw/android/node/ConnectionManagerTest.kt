@@ -2,8 +2,10 @@ package ai.openclaw.android.node
 
 import ai.openclaw.android.gateway.GatewayEndpoint
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConnectionManagerTest {
@@ -135,5 +137,16 @@ class ConnectionManagerTest {
       )
 
     assertNull(params)
+  }
+
+  @Test
+  fun isLoopbackHost_doesNotTreatWildcardBindAddressesAsLoopback() {
+    assertFalse(ConnectionManager.isLoopbackHost("0.0.0.0"))
+    assertFalse(ConnectionManager.isLoopbackHost("::"))
+  }
+
+  @Test
+  fun isLoopbackHost_acceptsIpv4MappedIpv6Loopback() {
+    assertTrue(ConnectionManager.isLoopbackHost("::ffff:127.0.0.1"))
   }
 }
