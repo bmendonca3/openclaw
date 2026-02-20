@@ -292,6 +292,7 @@ describe("isSecureWebSocketUrl", () => {
       expect(isSecureWebSocketUrl("ws://127.0.0.1:18789")).toBe(true);
       expect(isSecureWebSocketUrl("ws://localhost:18789")).toBe(true);
       expect(isSecureWebSocketUrl("ws://[::1]:18789")).toBe(true);
+      expect(isSecureWebSocketUrl("ws://[::ffff:127.0.0.1]:18789")).toBe(true);
       expect(isSecureWebSocketUrl("ws://127.0.0.42:18789")).toBe(true);
     });
 
