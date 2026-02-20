@@ -1,4 +1,5 @@
 import {
+  isTruthyEnvValue,
   TtsAutoSchema,
   TtsConfigSchema,
   TtsModeSchema,
@@ -393,6 +394,24 @@ export function resolveVoiceCallConfig(config: VoiceCallConfig): VoiceCallConfig
   return resolved;
 }
 
+function isLoopbackBindHost(host: string | undefined): boolean {
+  const normalized = host
+    ?.trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized.startsWith("127.") ||
+    normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
+    normalized.startsWith("::ffff:127.")
+  );
+}
+
 /**
  * Validate that the configuration has all required fields for the selected provider.
  */
@@ -417,16 +436,8 @@ export function validateProviderConfig(config: VoiceCallConfig): {
   if (config.skipSignatureVerification) {
     const env = process.env;
     const nodeEnv = (env.NODE_ENV ?? "").trim().toLowerCase();
-    const skipVerificationOverride = (env.OPENCLAW_UNSAFE_ALLOW_SKIP_SIGNATURE_VERIFICATION ?? "")
-      .trim()
-      .toLowerCase();
-    const allowUnsafeSkip =
-      skipVerificationOverride === "1" ||
-      skipVerificationOverride === "true" ||
-      skipVerificationOverride === "yes" ||
-      skipVerificationOverride === "on";
-    const bind = (config.serve?.bind ?? "").trim().toLowerCase();
-    const bindIsLoopback = bind === "127.0.0.1" || bind === "::1" || bind === "localhost";
+    const allowUnsafeSkip = isTruthyEnvValue(env.OPENCLAW_UNSAFE_ALLOW_SKIP_SIGNATURE_VERIFICATION);
+    const bindIsLoopback = isLoopbackBindHost(config.serve?.bind);
     const hasRemoteExposure =
       !bindIsLoopback ||
       Boolean(config.publicUrl?.trim()) ||
