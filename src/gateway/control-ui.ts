@@ -296,6 +296,13 @@ export function handleControlUiHttpRequest(
     );
     return true;
   }
+  let resolvedRoot = root;
+  try {
+    resolvedRoot = fs.realpathSync(root);
+  } catch {
+    respondNotFound(res);
+    return true;
+  }
 
   const uiPath =
     basePath && pathname.startsWith(`${basePath}/`) ? pathname.slice(basePath.length) : pathname;
@@ -323,18 +330,28 @@ export function handleControlUiHttpRequest(
   }
 
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-    if (path.basename(filePath) === "index.html") {
-      serveIndexHtml(res, filePath);
+    const resolvedFilePath = fs.realpathSync(filePath);
+    if (!isWithinDir(resolvedRoot, resolvedFilePath)) {
+      respondNotFound(res);
       return true;
     }
-    serveFile(res, filePath);
+    if (path.basename(resolvedFilePath) === "index.html") {
+      serveIndexHtml(res, resolvedFilePath);
+      return true;
+    }
+    serveFile(res, resolvedFilePath);
     return true;
   }
 
   // SPA fallback (client-side router): serve index.html for unknown paths.
   const indexPath = path.join(root, "index.html");
   if (fs.existsSync(indexPath)) {
-    serveIndexHtml(res, indexPath);
+    const resolvedIndexPath = fs.realpathSync(indexPath);
+    if (!isWithinDir(resolvedRoot, resolvedIndexPath)) {
+      respondNotFound(res);
+      return true;
+    }
+    serveIndexHtml(res, resolvedIndexPath);
     return true;
   }
 

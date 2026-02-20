@@ -157,4 +157,42 @@ describe("handleControlUiHttpRequest", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it("rejects symlink escapes that point outside the control-ui root", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ui-root-"));
+    try {
+      const root = path.join(tmp, "ui");
+      const sibling = path.join(tmp, "ui-secrets");
+      await fs.mkdir(path.join(root, "assets"), { recursive: true });
+      await fs.mkdir(sibling, { recursive: true });
+      await fs.writeFile(path.join(root, "index.html"), "<html>ok</html>\n");
+      const secretPath = path.join(sibling, "secret.txt");
+      await fs.writeFile(secretPath, "sensitive-data");
+      const symlinkPath = path.join(root, "assets", "escaped.txt");
+
+      try {
+        await fs.symlink(secretPath, symlinkPath);
+      } catch (error) {
+        if (process.platform === "win32") {
+          return;
+        }
+        throw error;
+      }
+
+      const { res, end } = makeMockHttpResponse();
+      const handled = handleControlUiHttpRequest(
+        { url: "/assets/escaped.txt", method: "GET" } as IncomingMessage,
+        res,
+        {
+          root: { kind: "resolved", path: root },
+        },
+      );
+
+      expect(handled).toBe(true);
+      expect(res.statusCode).toBe(404);
+      expect(end).toHaveBeenCalledWith("Not Found");
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
 });
