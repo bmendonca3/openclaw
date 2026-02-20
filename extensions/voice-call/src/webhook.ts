@@ -470,6 +470,13 @@ export class VoiceCallWebhookServer {
     if (twilioSignature && twilioIdempotencyToken) {
       return `${this.provider.name}:twilio:${twilioIdempotencyToken}:${twilioSignature}`;
     }
+    if (twilioSignature) {
+      const payloadFingerprint = crypto
+        .createHash("sha256")
+        .update(`${ctx.url}\n${ctx.rawBody}`)
+        .digest("hex");
+      return `${this.provider.name}:twilio:fallback:${twilioSignature}:${payloadFingerprint}`;
+    }
 
     return null;
   }
@@ -602,4 +609,78 @@ export async function getTailscaleSelfInfo(): Promise<TailscaleSelfInfo> {
   }
 
   return { dnsName: null, nodeId: null };
+}
+
+export async function getTailscaleDnsName(): Promise<string | null> {
+  const info = await getTailscaleSelfInfo();
+  return info.dnsName ?? null;
+}
+
+export async function setupTailscaleExposureRoute(opts: {
+  mode: "serve" | "funnel";
+  path: string;
+  localUrl: string;
+}): Promise<string | null> {
+  const dnsName = await getTailscaleDnsName();
+  if (!dnsName) {
+    console.warn("[voice-call] Could not get Tailscale DNS name");
+    return null;
+  }
+
+  const { code } = await runTailscaleCommand([
+    opts.mode,
+    "--bg",
+    "--yes",
+    "--set-path",
+    opts.path,
+    opts.localUrl,
+  ]);
+
+  if (code === 0) {
+    const publicUrl = `https://${dnsName}${opts.path}`;
+    console.log(`[voice-call] Tailscale ${opts.mode} active: ${publicUrl}`);
+    return publicUrl;
+  }
+
+  console.warn(`[voice-call] Tailscale ${opts.mode} failed`);
+  return null;
+}
+
+export async function cleanupTailscaleExposureRoute(opts: {
+  mode: "serve" | "funnel";
+  path: string;
+}): Promise<void> {
+  await runTailscaleCommand([opts.mode, "off", opts.path]);
+}
+
+/**
+ * Setup Tailscale serve/funnel for the webhook server.
+ * This is a helper that shells out to `tailscale serve` or `tailscale funnel`.
+ */
+export async function setupTailscaleExposure(config: VoiceCallConfig): Promise<string | null> {
+  if (config.tailscale.mode === "off") {
+    return null;
+  }
+
+  const mode = config.tailscale.mode === "funnel" ? "funnel" : "serve";
+  // Include the path suffix so tailscale forwards to the correct endpoint
+  // (tailscale strips the mount path prefix when proxying)
+  const localUrl = `http://127.0.0.1:${config.serve.port}${config.serve.path}`;
+  return setupTailscaleExposureRoute({
+    mode,
+    path: config.tailscale.path,
+    localUrl,
+  });
+}
+
+/**
+ * Cleanup Tailscale serve/funnel.
+ */
+export async function cleanupTailscaleExposure(config: VoiceCallConfig): Promise<void> {
+  if (config.tailscale.mode === "off") {
+    return;
+  }
+
+  const mode = config.tailscale.mode === "funnel" ? "funnel" : "serve";
+  await cleanupTailscaleExposureRoute({ mode, path: config.tailscale.path });
 }

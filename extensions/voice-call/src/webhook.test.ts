@@ -275,6 +275,62 @@ describe("VoiceCallWebhookServer replay protection", () => {
       await server.stop();
     }
   });
+
+  it("falls back to body fingerprint replay keys when Twilio idempotency token is missing", async () => {
+    const { manager, processEvent } = createWebhookRequestManager();
+    const twilioProvider: VoiceCallProvider = {
+      name: "twilio",
+      verifyWebhook: () => ({ ok: true }),
+      parseWebhookEvent: () => ({
+        events: [
+          {
+            id: crypto.randomUUID(),
+            type: "call.ringing",
+            callId: "call-2",
+            providerCallId: "provider-call-2",
+            timestamp: Date.now(),
+          },
+        ],
+      }),
+      initiateCall: async () => ({ providerCallId: "provider-call", status: "initiated" }),
+      hangupCall: async () => {},
+      playTts: async () => {},
+      startListening: async () => {},
+      stopListening: async () => {},
+    };
+
+    const config = createConfig({
+      serve: {
+        port: 0,
+        bind: "127.0.0.1",
+        path: "/voice/webhook",
+      },
+      staleCallReaperSeconds: 0,
+    });
+
+    const server = new VoiceCallWebhookServer(config, manager, twilioProvider);
+
+    try {
+      await server.start();
+      const port = getListeningPort(server);
+      const url = `http://127.0.0.1:${port}/voice/webhook`;
+      const headers = {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-twilio-signature": "signature-no-idempotency-token",
+      };
+      const body = "CallSid=CA123&CallStatus=ringing";
+
+      const first = await fetch(url, { method: "POST", headers, body });
+      expect(first.status).toBe(200);
+
+      const second = await fetch(url, { method: "POST", headers, body });
+      expect(second.status).toBe(200);
+
+      expect(processEvent).toHaveBeenCalledTimes(1);
+    } finally {
+      await server.stop();
+    }
+  });
 });
 
 describe("VoiceCallWebhookServer request path checks", () => {
