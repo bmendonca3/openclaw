@@ -52,19 +52,41 @@ export function isLoopbackAddress(ip: string | undefined): boolean {
   if (!ip) {
     return false;
   }
-  if (ip === "127.0.0.1") {
+  const normalized = ip.trim().toLowerCase();
+  if (normalized === "127.0.0.1") {
     return true;
   }
-  if (ip.startsWith("127.")) {
+  if (normalized.startsWith("127.")) {
     return true;
   }
-  if (ip === "::1") {
+  if (normalized === "::1" || normalized === "0:0:0:0:0:0:0:1") {
     return true;
   }
-  if (ip.startsWith("::ffff:127.")) {
+  if (isIpv4MappedLoopback(normalized)) {
     return true;
   }
   return false;
+}
+
+function isIpv4MappedLoopback(ip: string): boolean {
+  if (!ip.startsWith("::ffff:")) {
+    return false;
+  }
+  const mapped = ip.slice("::ffff:".length);
+  if (mapped.startsWith("127.")) {
+    return true;
+  }
+  const parts = mapped.split(":");
+  if (parts.length !== 2 || parts.some((part) => !/^[0-9a-f]{1,4}$/i.test(part))) {
+    return false;
+  }
+  const high = Number.parseInt(parts[0], 16);
+  const low = Number.parseInt(parts[1], 16);
+  if (!Number.isFinite(high) || !Number.isFinite(low)) {
+    return false;
+  }
+  const firstOctet = (high >> 8) & 0xff;
+  return firstOctet === 127;
 }
 
 /**

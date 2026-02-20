@@ -206,4 +206,23 @@ describe("pairing setup code", () => {
       urlSource: "gateway.remote.url",
     });
   });
+
+  it("allows IPv4-mapped IPv6 loopback ws:// URLs", async () => {
+    const resolved = await resolvePairingSetupFromConfig({
+      gateway: {
+        remote: { url: "ws://[::ffff:127.0.0.1]:18789" },
+        auth: { mode: "token", token: "tok_123" },
+      },
+    });
+
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      throw new Error("expected setup resolution to succeed");
+    }
+    expect(resolved.authLabel).toBe("token");
+    expect(resolved.urlSource).toBe("gateway.remote.url");
+    expect(resolved.payload.token).toBe("tok_123");
+    expect(resolved.payload.url).toContain("ws://[::ffff:");
+    expect(resolved.payload.url).toContain("]:18789");
+  });
 });
