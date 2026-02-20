@@ -446,6 +446,62 @@ describe("verifyTwilioWebhook", () => {
     expect(result.verificationUrl).toBe(webhookUrl);
   });
 
+  it("accepts IPv4-mapped IPv6 remote IPs for trusted proxy matching", () => {
+    const authToken = "test-auth-token";
+    const postBody = "CallSid=CS123&CallStatus=completed&From=%2B15550000000";
+    const webhookUrl = "https://proxy.example.com/voice/webhook";
+
+    const signature = twilioSignature({ authToken, url: webhookUrl, postBody });
+
+    const result = verifyTwilioWebhook(
+      {
+        headers: {
+          host: "localhost:3000",
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": "proxy.example.com",
+          "x-twilio-signature": signature,
+        },
+        rawBody: postBody,
+        url: "http://localhost:3000/voice/webhook",
+        method: "POST",
+        remoteAddress: "::ffff:203.0.113.10",
+      },
+      authToken,
+      { trustForwardingHeaders: true, trustedProxyIPs: ["203.0.113.10"] },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.verificationUrl).toBe(webhookUrl);
+  });
+
+  it("matches trusted proxy CIDRs after IPv4-mapped IPv6 normalization", () => {
+    const authToken = "test-auth-token";
+    const postBody = "CallSid=CS123&CallStatus=completed&From=%2B15550000000";
+    const webhookUrl = "https://proxy.example.com/voice/webhook";
+
+    const signature = twilioSignature({ authToken, url: webhookUrl, postBody });
+
+    const result = verifyTwilioWebhook(
+      {
+        headers: {
+          host: "localhost:3000",
+          "x-forwarded-proto": "https",
+          "x-forwarded-host": "proxy.example.com",
+          "x-twilio-signature": signature,
+        },
+        rawBody: postBody,
+        url: "http://localhost:3000/voice/webhook",
+        method: "POST",
+        remoteAddress: "::ffff:203.0.113.77",
+      },
+      authToken,
+      { trustForwardingHeaders: true, trustedProxyIPs: ["203.0.113.0/24"] },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.verificationUrl).toBe(webhookUrl);
+  });
+
   it("ignores forwarding headers when trustedProxyIPs are set but remote IP is missing", () => {
     const authToken = "test-auth-token";
     const postBody = "CallSid=CS123&CallStatus=completed&From=%2B15550000000";

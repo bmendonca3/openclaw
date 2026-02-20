@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import net from "node:net";
 import type { WebhookContext } from "./types.js";
 
 /**
@@ -163,6 +164,89 @@ function normalizeAllowedHosts(allowedHosts?: string[]): Set<string> | null {
   return normalized.size > 0 ? normalized : null;
 }
 
+function normalizeProxyIp(raw: string | undefined): string | null {
+  const trimmed = raw?.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  let value = trimmed;
+  if (value.startsWith("[") && value.endsWith("]")) {
+    value = value.slice(1, -1);
+  }
+  if (value === "0:0:0:0:0:0:0:1") {
+    value = "::1";
+  }
+  if (value.startsWith("::ffff:")) {
+    const mapped = value.slice("::ffff:".length);
+    if (net.isIP(mapped) === 4) {
+      value = mapped;
+    }
+  }
+  if (net.isIP(value)) {
+    return value;
+  }
+
+  // Handle IPv4 with trailing :port.
+  const colonIndex = value.lastIndexOf(":");
+  if (colonIndex > -1) {
+    const maybeIpv4 = value.slice(0, colonIndex);
+    if (net.isIP(maybeIpv4) === 4) {
+      return maybeIpv4;
+    }
+  }
+
+  return null;
+}
+
+function parseIpv4ToInt(ip: string): number | null {
+  const octets = ip.split(".").map((part) => Number.parseInt(part, 10));
+  if (octets.length !== 4 || octets.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return null;
+  }
+  return ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+}
+
+function matchesIpv4Cidr(ip: string, cidr: string): boolean {
+  const [subnetRaw, prefixRaw] = cidr.split("/");
+  const prefix = Number.parseInt(prefixRaw, 10);
+  if (Number.isNaN(prefix) || prefix < 0 || prefix > 32) {
+    return false;
+  }
+
+  const subnet = normalizeProxyIp(subnetRaw);
+  if (!subnet || net.isIP(subnet) !== 4 || net.isIP(ip) !== 4) {
+    return false;
+  }
+
+  const ipInt = parseIpv4ToInt(ip);
+  const subnetInt = parseIpv4ToInt(subnet);
+  if (ipInt === null || subnetInt === null) {
+    return false;
+  }
+
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return (ipInt & mask) === (subnetInt & mask);
+}
+
+function isTrustedProxyIp(remoteIp: string | undefined, trustedProxyIPs: string[]): boolean {
+  const normalizedRemote = normalizeProxyIp(remoteIp);
+  if (!normalizedRemote) {
+    return false;
+  }
+
+  return trustedProxyIPs.some((candidateRaw) => {
+    const candidate = candidateRaw.trim();
+    if (!candidate) {
+      return false;
+    }
+    if (candidate.includes("/")) {
+      return matchesIpv4Cidr(normalizedRemote, candidate);
+    }
+    return normalizeProxyIp(candidate) === normalizedRemote;
+  });
+}
+
 /**
  * Reconstruct the public webhook URL from request headers.
  *
@@ -194,8 +278,7 @@ export function reconstructWebhookUrl(ctx: WebhookContext, options?: WebhookUrlO
   const trustedProxyIPs = options?.trustedProxyIPs?.filter(Boolean) ?? [];
   const hasTrustedProxyIPs = trustedProxyIPs.length > 0;
   const remoteIP = options?.remoteIP ?? ctx.remoteAddress;
-  const fromTrustedProxy =
-    hasTrustedProxyIPs && (remoteIP ? trustedProxyIPs.includes(remoteIP) : false);
+  const fromTrustedProxy = hasTrustedProxyIPs && isTrustedProxyIp(remoteIP, trustedProxyIPs);
 
   // Only trust forwarding headers if: (has whitelist OR explicitly trusted) AND from trusted proxy
   const shouldTrustForwardingHeaders = (hasAllowedHosts || explicitlyTrusted) && fromTrustedProxy;
@@ -306,16 +389,14 @@ function getHeader(
 }
 
 function isLoopbackAddress(address?: string): boolean {
-  if (!address) {
+  const normalized = normalizeProxyIp(address);
+  if (!normalized) {
     return false;
   }
-  if (address === "127.0.0.1" || address === "::1") {
+  if (normalized === "::1") {
     return true;
   }
-  if (address.startsWith("::ffff:127.")) {
-    return true;
-  }
-  return false;
+  return normalized === "127.0.0.1" || normalized.startsWith("127.");
 }
 
 /**
