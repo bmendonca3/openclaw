@@ -269,6 +269,31 @@ describe("validateProviderConfig", () => {
 
       expect(result).toMatchObject({ valid: true, errors: [] });
     });
+
+    it("treats IPv4-mapped IPv6 loopback binds as local development", () => {
+      process.env.NODE_ENV = "development";
+      const config = createBaseConfig("twilio");
+      config.skipSignatureVerification = true;
+      config.twilio = { accountSid: "AC123", authToken: "secret" };
+      config.serve.bind = "::ffff:127.0.0.1";
+
+      const result = validateProviderConfig(config);
+
+      expect(result).toMatchObject({ valid: true, errors: [] });
+    });
+
+    it("does not treat wildcard bind addresses as loopback", () => {
+      process.env.NODE_ENV = "development";
+      const config = createBaseConfig("twilio");
+      config.skipSignatureVerification = true;
+      config.twilio = { accountSid: "AC123", authToken: "secret" };
+      config.serve.bind = "::";
+
+      const result = validateProviderConfig(config);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((error) => error.includes("skipSignatureVerification"))).toBe(true);
+    });
   });
 
   describe("plivo provider", () => {
