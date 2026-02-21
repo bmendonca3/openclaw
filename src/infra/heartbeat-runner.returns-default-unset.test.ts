@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import * as replyModule from "../auto-reply/reply.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import { whatsappOutbound } from "../channels/plugins/outbound/whatsapp.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
@@ -19,6 +20,7 @@ import {
   isHeartbeatEnabledForAgent,
   resolveHeartbeatIntervalMs,
   resolveHeartbeatPrompt,
+  type HeartbeatDeps,
   runHeartbeatOnce,
 } from "./heartbeat-runner.js";
 import {
@@ -439,7 +441,10 @@ describe("resolveHeartbeatSenderContext", () => {
 });
 
 describe("runHeartbeatOnce", () => {
-  const createHeartbeatDeps = (sendWhatsApp: ReturnType<typeof vi.fn>, nowMs = 0) => ({
+  const createHeartbeatDeps = (
+    sendWhatsApp: NonNullable<HeartbeatDeps["sendWhatsApp"]>,
+    nowMs = 0,
+  ): HeartbeatDeps => ({
     sendWhatsApp,
     getQueueSize: () => 0,
     nowMs: () => nowMs,
@@ -875,7 +880,9 @@ describe("runHeartbeatOnce", () => {
         );
 
         replySpy.mockReset();
-        replySpy.mockResolvedValue(testCase.replies);
+        replySpy.mockResolvedValue(
+          testCase.replies.map((payload) => ({ ...payload })) as ReplyPayload[],
+        );
         const sendWhatsApp = vi.fn().mockResolvedValue({ messageId: "m1", toJid: "jid" });
 
         await runHeartbeatOnce({
