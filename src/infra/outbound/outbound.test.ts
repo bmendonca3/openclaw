@@ -847,7 +847,9 @@ describe("normalizeOutboundPayloadsForJson", () => {
     ] as const;
 
     for (const testCase of cases) {
-      expect(normalizeOutboundPayloadsForJson(testCase.input)).toEqual(testCase.expected);
+      expect(
+        normalizeOutboundPayloadsForJson(testCase.input.map((payload) => ({ ...payload }))),
+      ).toEqual(testCase.expected);
     }
   });
 });
@@ -882,7 +884,13 @@ describe("formatOutboundPayloadLog", () => {
     ] as const;
 
     for (const testCase of cases) {
-      expect(formatOutboundPayloadLog(testCase.input), testCase.name).toBe(testCase.expected);
+      expect(
+        formatOutboundPayloadLog({
+          ...testCase.input,
+          mediaUrls: [...testCase.input.mediaUrls],
+        }),
+        testCase.name,
+      ).toBe(testCase.expected);
     }
   });
 });
