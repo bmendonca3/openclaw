@@ -10,7 +10,6 @@ const SKIP_PATTERNS = [
   /\.e2e\.tsx?$/,
   /\.d\.ts$/,
   /[\\/](?:__tests__|tests)[\\/]/,
-  /[\\/][^\\/]*test-utils(?:\.[^\\/]+)?\.ts$/,
   /[\\/]test-helpers(?:\.[^\\/]+)?\.ts$/,
 ];
 

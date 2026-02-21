@@ -59,10 +59,7 @@ fi
 ENTRY_PATH=""
 if [[ -z "$CMD_PATH" ]]; then
   NPM_ROOT="$(npm root -g 2>/dev/null || true)"
-  NPM_ROOT="${NPM_ROOT//$'\r'/}"
-  if [[ -n "$NPM_ROOT" && -f "$NPM_ROOT/$PACKAGE_NAME/openclaw.mjs" ]]; then
-    ENTRY_PATH="$NPM_ROOT/$PACKAGE_NAME/openclaw.mjs"
-  elif [[ -n "$NPM_ROOT" && -f "$NPM_ROOT/$PACKAGE_NAME/dist/entry.js" ]]; then
+  if [[ -n "$NPM_ROOT" && -f "$NPM_ROOT/$PACKAGE_NAME/dist/entry.js" ]]; then
     ENTRY_PATH="$NPM_ROOT/$PACKAGE_NAME/dist/entry.js"
   fi
 fi
