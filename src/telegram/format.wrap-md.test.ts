@@ -237,10 +237,10 @@ describe("edge cases", () => {
     ] as const;
     for (const testCase of cases) {
       const result = markdownToTelegramHtml(testCase.input);
-      for (const expected of testCase.contains ?? []) {
+      for (const expected of "contains" in testCase ? testCase.contains : []) {
         expect(result, testCase.name).toContain(expected);
       }
-      for (const unexpected of testCase.notContains ?? []) {
+      for (const unexpected of "notContains" in testCase ? testCase.notContains : []) {
         expect(result, testCase.name).not.toContain(unexpected);
       }
     }
@@ -297,7 +297,7 @@ describe("edge cases", () => {
       if ("expectedExact" in testCase) {
         expect(result, testCase.name).toBe(testCase.expectedExact);
       }
-      for (const expected of testCase.contains ?? []) {
+      for (const expected of "contains" in testCase ? testCase.contains : []) {
         expect(result, testCase.name).toContain(expected);
       }
     }

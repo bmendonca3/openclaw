@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { OpenClawConfig } from "./config.js";
 import { migrateLegacyConfig, validateConfigObject } from "./config.js";
 
 function getLegacyRouting(config: unknown) {
@@ -470,13 +471,13 @@ describe("legacy config detection", () => {
       const res = validateConfigObject(testCase.input);
       expect(res.ok, testCase.name).toBe(true);
       if (res.ok) {
-        if (testCase.expectedTopLevel !== undefined) {
+        if ("expectedTopLevel" in testCase) {
           expect(res.config.channels?.telegram?.streaming, testCase.name).toBe(
             testCase.expectedTopLevel,
           );
           expect(res.config.channels?.telegram?.streamMode, testCase.name).toBeUndefined();
         }
-        if (testCase.expectedAccountStreaming !== undefined) {
+        if ("expectedAccountStreaming" in testCase) {
           expect(res.config.channels?.telegram?.accounts?.ops?.streaming, testCase.name).toBe(
             testCase.expectedAccountStreaming,
           );
