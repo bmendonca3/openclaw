@@ -408,17 +408,19 @@ describe("redactConfigSnapshot", () => {
           custom2: [{ mySecret: "this-is-a-custom-secret-value" }],
         }),
         assert: ({ redacted, restored }) => {
-          const cfg = redacted as Record<string, Record<string, unknown>>;
+          const cfg = redacted;
           const cfgCustom2 = cfg.custom2 as unknown[];
           expect(cfgCustom2.length).toBeGreaterThan(0);
-          expect((cfg.custom1.anykey as Record<string, unknown>).mySecret).toBe(REDACTED_SENTINEL);
+          expect(
+            ((cfg.custom1 as Record<string, unknown>).anykey as Record<string, unknown>).mySecret,
+          ).toBe(REDACTED_SENTINEL);
           expect((cfgCustom2[0] as Record<string, unknown>).mySecret).toBe(REDACTED_SENTINEL);
-          const out = restored as Record<string, Record<string, unknown>>;
+          const out = restored;
           const outCustom2 = out.custom2 as unknown[];
           expect(outCustom2.length).toBeGreaterThan(0);
-          expect((out.custom1.anykey as Record<string, unknown>).mySecret).toBe(
-            "this-is-a-custom-secret-value",
-          );
+          expect(
+            ((out.custom1 as Record<string, unknown>).anykey as Record<string, unknown>).mySecret,
+          ).toBe("this-is-a-custom-secret-value");
           expect((outCustom2[0] as Record<string, unknown>).mySecret).toBe(
             "this-is-a-custom-secret-value",
           );
@@ -435,17 +437,19 @@ describe("redactConfigSnapshot", () => {
           custom2: [{ mySecret: "this-is-a-custom-secret-value" }],
         }),
         assert: ({ redacted, restored }) => {
-          const cfg = redacted as Record<string, Record<string, unknown>>;
+          const cfg = redacted;
           const cfgCustom2 = cfg.custom2 as unknown[];
           expect(cfgCustom2.length).toBeGreaterThan(0);
-          expect((cfg.custom1.anykey as Record<string, unknown>).mySecret).toBe(REDACTED_SENTINEL);
+          expect(
+            ((cfg.custom1 as Record<string, unknown>).anykey as Record<string, unknown>).mySecret,
+          ).toBe(REDACTED_SENTINEL);
           expect((cfgCustom2[0] as Record<string, unknown>).mySecret).toBe(REDACTED_SENTINEL);
-          const out = restored as Record<string, Record<string, unknown>>;
+          const out = restored;
           const outCustom2 = out.custom2 as unknown[];
           expect(outCustom2.length).toBeGreaterThan(0);
-          expect((out.custom1.anykey as Record<string, unknown>).mySecret).toBe(
-            "this-is-a-custom-secret-value",
-          );
+          expect(
+            ((out.custom1 as Record<string, unknown>).anykey as Record<string, unknown>).mySecret,
+          ).toBe("this-is-a-custom-secret-value");
           expect((outCustom2[0] as Record<string, unknown>).mySecret).toBe(
             "this-is-a-custom-secret-value",
           );
