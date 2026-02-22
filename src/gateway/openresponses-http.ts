@@ -334,6 +334,21 @@ export async function handleOpenResponsesHttpRequest(
   res: ServerResponse,
   opts: OpenResponsesHttpOptions,
 ): Promise<boolean> {
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  if (url.pathname !== "/v1/responses") {
+    return false;
+  }
+  if (opts.auth.mode === "none") {
+    sendJson(res, 403, {
+      error: {
+        type: "forbidden",
+        message:
+          "gateway.auth.mode=none does not allow `/v1/responses`; configure token/password auth.",
+      },
+    });
+    return true;
+  }
+
   const limits = resolveResponsesLimits(opts.config);
   const maxBodyBytes =
     opts.maxBodyBytes ??

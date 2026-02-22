@@ -120,6 +120,11 @@ export async function resolveGatewayRuntimeConfig(params: {
       `refusing to bind gateway to ${bindHost}:${params.port} without auth (set gateway.auth.token/password, or set OPENCLAW_GATEWAY_TOKEN/OPENCLAW_GATEWAY_PASSWORD)`,
     );
   }
+  if (authMode === "none" && (openAiChatCompletionsEnabled || openResponsesEnabled)) {
+    throw new Error(
+      "gateway auth mode=none cannot enable HTTP model endpoints (`/v1/chat/completions` or `/v1/responses`); use token/password auth or disable those endpoints.",
+    );
+  }
 
   if (authMode === "trusted-proxy") {
     if (trustedProxies.length === 0) {

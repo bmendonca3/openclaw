@@ -150,6 +150,18 @@ describe("resolveGatewayRuntimeConfig", () => {
         expectedMessage: "refusing to bind gateway",
       },
       {
+        name: "loopback none auth with chat completions endpoint enabled",
+        cfg: { gateway: { bind: "loopback" as const, auth: { mode: "none" as const } } },
+        openAiChatCompletionsEnabled: true,
+        expectedMessage: "gateway auth mode=none cannot enable HTTP model endpoints",
+      },
+      {
+        name: "loopback none auth with responses endpoint enabled",
+        cfg: { gateway: { bind: "loopback" as const, auth: { mode: "none" as const } } },
+        openResponsesEnabled: true,
+        expectedMessage: "gateway auth mode=none cannot enable HTTP model endpoints",
+      },
+      {
         name: "loopback binding that resolves to non-loopback host",
         cfg: { gateway: { bind: "loopback" as const, auth: { mode: "none" as const } } },
         host: "0.0.0.0",
@@ -183,10 +195,25 @@ describe("resolveGatewayRuntimeConfig", () => {
         host: "0.0.0.0",
         expectedMessage: "gateway bind=custom requested 192.168.1.100 but resolved 0.0.0.0",
       },
-    ])("rejects $name", async ({ cfg, host, expectedMessage }) => {
-      await expect(resolveGatewayRuntimeConfig({ cfg, port: 18789, host })).rejects.toThrow(
+    ])(
+      "rejects $name",
+      async ({
+        cfg,
+        host,
         expectedMessage,
-      );
-    });
+        openAiChatCompletionsEnabled,
+        openResponsesEnabled,
+      }) => {
+        await expect(
+          resolveGatewayRuntimeConfig({
+            cfg,
+            port: 18789,
+            host,
+            openAiChatCompletionsEnabled,
+            openResponsesEnabled,
+          }),
+        ).rejects.toThrow(expectedMessage);
+      },
+    );
   });
 });

@@ -151,6 +151,17 @@ export async function handleToolsInvokeHttpRequest(
     sendMethodNotAllowed(res, "POST");
     return true;
   }
+  if (opts.auth.mode === "none") {
+    sendJson(res, 403, {
+      ok: false,
+      error: {
+        type: "forbidden",
+        message:
+          "gateway.auth.mode=none does not allow `/tools/invoke`; configure token/password auth.",
+      },
+    });
+    return true;
+  }
 
   const cfg = loadConfig();
   const token = getBearerToken(req);

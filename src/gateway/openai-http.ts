@@ -204,6 +204,21 @@ export async function handleOpenAiHttpRequest(
   res: ServerResponse,
   opts: OpenAiHttpOptions,
 ): Promise<boolean> {
+  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  if (url.pathname !== "/v1/chat/completions") {
+    return false;
+  }
+  if (opts.auth.mode === "none") {
+    sendJson(res, 403, {
+      error: {
+        type: "forbidden",
+        message:
+          "gateway.auth.mode=none does not allow `/v1/chat/completions`; configure token/password auth.",
+      },
+    });
+    return true;
+  }
+
   const handled = await handleGatewayPostJsonEndpoint(req, res, {
     pathname: "/v1/chat/completions",
     auth: opts.auth,

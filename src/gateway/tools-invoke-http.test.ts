@@ -262,6 +262,42 @@ const invokeToolAuthed = async (params: {
   });
 
 describe("POST /tools/invoke", () => {
+  it("rejects /tools/invoke when gateway.auth.mode=none", async () => {
+    const server = createServer((req, res) => {
+      void handleToolsInvokeHttpRequest(req, res, {
+        auth: { mode: "none", allowTailscale: false },
+      }).then((handled) => {
+        if (!handled) {
+          res.statusCode = 404;
+          res.end("not found");
+        }
+      });
+    });
+    const port = await new Promise<number>((resolve) => {
+      server.listen(0, "127.0.0.1", () => {
+        const address = server.address() as AddressInfo | null;
+        resolve(address?.port ?? 0);
+      });
+    });
+
+    try {
+      const res = await postToolsInvoke({
+        port,
+        body: { tool: "session_status", args: {} },
+      });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as {
+        ok?: boolean;
+        error?: { type?: string; message?: string };
+      };
+      expect(body.ok).toBe(false);
+      expect(body.error?.type).toBe("forbidden");
+      expect(body.error?.message).toContain("/tools/invoke");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it("invokes a tool and returns {ok:true,result}", async () => {
     allowAgentsListForMain();
     const res = await invokeAgentsListAuthed({ sessionKey: "main" });
