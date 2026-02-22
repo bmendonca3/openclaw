@@ -39,13 +39,16 @@ function createHooksConfig(): HooksConfigResolved {
 function createRequest(params?: {
   authorization?: string;
   remoteAddress?: string;
+  url?: string;
+  contentType?: string;
 }): IncomingMessage {
   return {
     method: "POST",
-    url: "/hooks/wake",
+    url: params?.url ?? "/hooks/wake",
     headers: {
       host: "127.0.0.1:18789",
       authorization: params?.authorization ?? "Bearer hook-secret",
+      "content-type": params?.contentType ?? "application/json",
     },
     socket: { remoteAddress: params?.remoteAddress ?? "127.0.0.1" },
   } as IncomingMessage;
@@ -96,6 +99,101 @@ describe("createHooksRequestHandler timeout status mapping", () => {
     expect(handled).toBe(true);
     expect(res.statusCode).toBe(408);
     expect(end).toHaveBeenCalledWith(JSON.stringify({ ok: false, error: "request body timeout" }));
+    expect(dispatchWakeHook).not.toHaveBeenCalled();
+    expect(dispatchAgentHook).not.toHaveBeenCalled();
+  });
+
+  test("returns 415 when content-type is not json", async () => {
+    readJsonBodyMock.mockResolvedValue({ ok: true, value: { text: "wake" } });
+    const dispatchWakeHook = vi.fn();
+    const dispatchAgentHook = vi.fn(() => "run-1");
+    const handler = createHooksRequestHandler({
+      getHooksConfig: () => createHooksConfig(),
+      bindHost: "127.0.0.1",
+      port: 18789,
+      logHooks: {
+        warn: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        error: vi.fn(),
+      } as unknown as ReturnType<typeof createSubsystemLogger>,
+      dispatchWakeHook,
+      dispatchAgentHook,
+    });
+    const req = createRequest({ contentType: "text/plain" });
+    const { res, end } = createResponse();
+
+    const handled = await handler(req, res);
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(415);
+    expect(end).toHaveBeenCalledWith(
+      JSON.stringify({ ok: false, error: "content-type must be application/json" }),
+    );
+    expect(readJsonBodyMock).not.toHaveBeenCalled();
+    expect(dispatchWakeHook).not.toHaveBeenCalled();
+    expect(dispatchAgentHook).not.toHaveBeenCalled();
+  });
+
+  test("rejects unknown top-level keys on /hooks/wake", async () => {
+    readJsonBodyMock.mockResolvedValue({ ok: true, value: { text: "wake", extra: true } });
+    const dispatchWakeHook = vi.fn();
+    const dispatchAgentHook = vi.fn(() => "run-1");
+    const handler = createHooksRequestHandler({
+      getHooksConfig: () => createHooksConfig(),
+      bindHost: "127.0.0.1",
+      port: 18789,
+      logHooks: {
+        warn: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        error: vi.fn(),
+      } as unknown as ReturnType<typeof createSubsystemLogger>,
+      dispatchWakeHook,
+      dispatchAgentHook,
+    });
+    const req = createRequest({ url: "/hooks/wake" });
+    const { res, end } = createResponse();
+
+    const handled = await handler(req, res);
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(400);
+    expect(end).toHaveBeenCalledWith(JSON.stringify({ ok: false, error: "unknown fields: extra" }));
+    expect(dispatchWakeHook).not.toHaveBeenCalled();
+    expect(dispatchAgentHook).not.toHaveBeenCalled();
+  });
+
+  test("rejects unknown top-level keys on /hooks/agent", async () => {
+    readJsonBodyMock.mockResolvedValue({
+      ok: true,
+      value: { message: "wake up", channel: "last", deliver: true, unknown: "x" },
+    });
+    const dispatchWakeHook = vi.fn();
+    const dispatchAgentHook = vi.fn(() => "run-1");
+    const handler = createHooksRequestHandler({
+      getHooksConfig: () => createHooksConfig(),
+      bindHost: "127.0.0.1",
+      port: 18789,
+      logHooks: {
+        warn: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        error: vi.fn(),
+      } as unknown as ReturnType<typeof createSubsystemLogger>,
+      dispatchWakeHook,
+      dispatchAgentHook,
+    });
+    const req = createRequest({ url: "/hooks/agent" });
+    const { res, end } = createResponse();
+
+    const handled = await handler(req, res);
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(400);
+    expect(end).toHaveBeenCalledWith(
+      JSON.stringify({ ok: false, error: "unknown fields: unknown" }),
+    );
     expect(dispatchWakeHook).not.toHaveBeenCalled();
     expect(dispatchAgentHook).not.toHaveBeenCalled();
   });

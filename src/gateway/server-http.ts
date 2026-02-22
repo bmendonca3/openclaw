@@ -66,6 +66,47 @@ type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
 const HOOK_AUTH_FAILURE_LIMIT = 20;
 const HOOK_AUTH_FAILURE_WINDOW_MS = 60_000;
+const HOOK_WAKE_ALLOWED_KEYS = new Set(["text", "mode"]);
+const HOOK_AGENT_ALLOWED_KEYS = new Set([
+  "message",
+  "name",
+  "agentId",
+  "wakeMode",
+  "sessionKey",
+  "deliver",
+  "channel",
+  "to",
+  "model",
+  "thinking",
+  "timeoutSeconds",
+]);
+
+function resolveContentTypeHeader(req: IncomingMessage): string {
+  const raw = req.headers["content-type"];
+  if (typeof raw === "string") {
+    return raw;
+  }
+  if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === "string") {
+    return raw[0];
+  }
+  return "";
+}
+
+function isJsonContentType(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  const mediaType = normalized.split(";")[0]?.trim() ?? "";
+  return mediaType === "application/json" || mediaType.endsWith("+json");
+}
+
+function getUnknownPayloadKeys(
+  payload: Record<string, unknown>,
+  allowedKeys: Set<string>,
+): string[] {
+  return Object.keys(payload).filter((key) => !allowedKeys.has(key));
+}
 
 type HookDispatchers = {
   dispatchWakeHook: (value: { text: string; mode: "now" | "next-heartbeat" }) => void;
@@ -283,6 +324,10 @@ export function createHooksRequestHandler(
       res.end("Method Not Allowed");
       return true;
     }
+    if (!isJsonContentType(resolveContentTypeHeader(req))) {
+      sendJson(res, 415, { ok: false, error: "content-type must be application/json" });
+      return true;
+    }
 
     const subPath = url.pathname.slice(basePath.length).replace(/^\/+/, "");
     if (!subPath) {
@@ -308,6 +353,17 @@ export function createHooksRequestHandler(
     const headers = normalizeHookHeaders(req);
 
     if (subPath === "wake") {
+      const unknownKeys = getUnknownPayloadKeys(
+        payload as Record<string, unknown>,
+        HOOK_WAKE_ALLOWED_KEYS,
+      );
+      if (unknownKeys.length > 0) {
+        sendJson(res, 400, {
+          ok: false,
+          error: `unknown fields: ${unknownKeys.toSorted().join(", ")}`,
+        });
+        return true;
+      }
       const normalized = normalizeWakePayload(payload as Record<string, unknown>);
       if (!normalized.ok) {
         sendJson(res, 400, { ok: false, error: normalized.error });
@@ -319,6 +375,17 @@ export function createHooksRequestHandler(
     }
 
     if (subPath === "agent") {
+      const unknownKeys = getUnknownPayloadKeys(
+        payload as Record<string, unknown>,
+        HOOK_AGENT_ALLOWED_KEYS,
+      );
+      if (unknownKeys.length > 0) {
+        sendJson(res, 400, {
+          ok: false,
+          error: `unknown fields: ${unknownKeys.toSorted().join(", ")}`,
+        });
+        return true;
+      }
       const normalized = normalizeAgentPayload(payload as Record<string, unknown>);
       if (!normalized.ok) {
         sendJson(res, 400, { ok: false, error: normalized.error });
