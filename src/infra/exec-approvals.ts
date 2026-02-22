@@ -22,6 +22,7 @@ export type ExecApprovalRequest = {
     agentId?: string | null;
     resolvedPath?: string | null;
     sessionKey?: string | null;
+    critical?: boolean | null;
   };
   createdAtMs: number;
   expiresAtMs: number;

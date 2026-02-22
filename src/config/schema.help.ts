@@ -102,6 +102,12 @@ export const FIELD_HELP: Record<string, string> = {
     "Allow stdin-only safe binaries to run without explicit allowlist entries.",
   "tools.exec.safeBinProfiles":
     "Optional per-binary safe-bin profiles (positional limits + allowed/denied flags).",
+  "tools.elevated.criticalApproval.enabled":
+    "Enable an additional human-in-the-loop gate for critical elevated exec approvals.",
+  "tools.elevated.criticalApproval.requireControlUi":
+    "When true (default), critical elevated approvals must be resolved by a Control UI client.",
+  "tools.elevated.criticalApproval.breakGlassEnv":
+    "Env var name containing the required one-time approval code for critical elevated approvals (default: OPENCLAW_CRITICAL_APPROVAL_CODE).",
   "tools.fs.workspaceOnly":
     "Restrict filesystem tools (read/write/edit/apply_patch) to the workspace directory (default: false).",
   "tools.sessions.visibility":

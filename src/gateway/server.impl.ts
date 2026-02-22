@@ -559,6 +559,12 @@ export async function startGatewayServer(
   const execApprovalForwarder = createExecApprovalForwarder();
   const execApprovalHandlers = createExecApprovalHandlers(execApprovalManager, {
     forwarder: execApprovalForwarder,
+    criticalApproval: {
+      enabled: cfgAtStart.tools?.elevated?.criticalApproval?.enabled === true,
+      requireControlUi: cfgAtStart.tools?.elevated?.criticalApproval?.requireControlUi !== false,
+      breakGlassEnv: cfgAtStart.tools?.elevated?.criticalApproval?.breakGlassEnv,
+      env: process.env,
+    },
   });
 
   const canvasHostServerPort = (canvasHostServer as CanvasHostServer | null)?.port;

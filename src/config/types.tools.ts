@@ -248,6 +248,21 @@ export type AgentToolsConfig = {
     enabled?: boolean;
     /** Approved senders for /elevated (per-provider allowlists). */
     allowFrom?: AgentElevatedAllowFromConfig;
+    /**
+     * Additional human-in-the-loop requirements for critical elevated approvals.
+     * Agent scope can only further restrict global behavior.
+     */
+    criticalApproval?: {
+      /** Enable critical approval hard-gate for this scope. */
+      enabled?: boolean;
+      /** Require approvals to be resolved from Control UI client ids. */
+      requireControlUi?: boolean;
+      /**
+       * Env var containing the one-time break-glass code required to approve
+       * critical requests (default: OPENCLAW_CRITICAL_APPROVAL_CODE).
+       */
+      breakGlassEnv?: string;
+    };
   };
   /** Exec tool defaults for this agent. */
   exec?: ExecToolConfig;
@@ -510,6 +525,18 @@ export type ToolsConfig = {
     enabled?: boolean;
     /** Approved senders for /elevated (per-provider allowlists). */
     allowFrom?: AgentElevatedAllowFromConfig;
+    /** Human-in-the-loop requirements for critical elevated approvals. */
+    criticalApproval?: {
+      /** Enable critical approval hard-gate. */
+      enabled?: boolean;
+      /** Require approvals to be resolved from Control UI client ids. */
+      requireControlUi?: boolean;
+      /**
+       * Env var containing the one-time break-glass code required to approve
+       * critical requests (default: OPENCLAW_CRITICAL_APPROVAL_CODE).
+       */
+      breakGlassEnv?: string;
+    };
   };
   /** Exec tool defaults. */
   exec?: ExecToolConfig;

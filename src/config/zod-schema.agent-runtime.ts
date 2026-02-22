@@ -455,6 +455,14 @@ export const AgentToolsSchema = z
       .object({
         enabled: z.boolean().optional(),
         allowFrom: ElevatedAllowFromSchema,
+        criticalApproval: z
+          .object({
+            enabled: z.boolean().optional(),
+            requireControlUi: z.boolean().optional(),
+            breakGlassEnv: z.string().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -701,6 +709,14 @@ export const ToolsSchema = z
       .object({
         enabled: z.boolean().optional(),
         allowFrom: ElevatedAllowFromSchema,
+        criticalApproval: z
+          .object({
+            enabled: z.boolean().optional(),
+            requireControlUi: z.boolean().optional(),
+            breakGlassEnv: z.string().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

@@ -8,6 +8,7 @@ import { emitAgentEvent } from "../../infra/agent-events.js";
 import { formatZonedTimestamp } from "../../infra/format-time/format-datetime.js";
 import { resetLogger, setLoggerOverride } from "../../logging.js";
 import { ExecApprovalManager } from "../exec-approval-manager.js";
+import { GATEWAY_CLIENT_IDS } from "../protocol/client-info.js";
 import { validateExecApprovalRequestParams } from "../protocol/index.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
@@ -289,20 +290,37 @@ describe("exec approval handlers", () => {
     id: string;
     respond: ReturnType<typeof vi.fn>;
     context: { broadcast: (event: string, payload: unknown) => void };
+    decision?: "allow-once" | "allow-always" | "deny";
+    approvalCode?: string;
+    client?: ExecApprovalResolveArgs["client"];
   }) {
+    const decision = params.decision ?? "allow-once";
+    const resolveParams: Record<string, unknown> = { id: params.id, decision };
+    if (params.approvalCode !== undefined) {
+      resolveParams.approvalCode = params.approvalCode;
+    }
     return params.handlers["exec.approval.resolve"]({
-      params: { id: params.id, decision: "allow-once" } as ExecApprovalResolveArgs["params"],
+      params: resolveParams,
       respond: params.respond as unknown as ExecApprovalResolveArgs["respond"],
       context: toExecApprovalResolveContext(params.context),
-      client: null,
+      client: params.client ?? null,
       req: { id: "req-2", type: "req", method: "exec.approval.resolve" },
       isWebchatConnect: execApprovalNoop,
     });
   }
 
-  function createExecApprovalFixture() {
+  function createExecApprovalFixture(params?: {
+    criticalApproval?: {
+      enabled?: boolean;
+      requireControlUi?: boolean;
+      breakGlassEnv?: string;
+      env?: NodeJS.ProcessEnv;
+    };
+  }) {
     const manager = new ExecApprovalManager();
-    const handlers = createExecApprovalHandlers(manager);
+    const handlers = createExecApprovalHandlers(manager, {
+      criticalApproval: params?.criticalApproval,
+    });
     const broadcasts: Array<{ event: string; payload: unknown }> = [];
     const respond = vi.fn();
     const context = {
@@ -310,7 +328,18 @@ describe("exec approval handlers", () => {
         broadcasts.push({ event, payload });
       },
     };
-    return { handlers, broadcasts, respond, context };
+    return { manager, handlers, broadcasts, respond, context };
+  }
+
+  function makeResolveClient(id: string, displayName?: string): ExecApprovalResolveArgs["client"] {
+    return {
+      connect: {
+        client: {
+          id,
+          displayName,
+        },
+      },
+    } as unknown as ExecApprovalResolveArgs["client"];
   }
 
   describe("ExecApprovalRequestParams validation", () => {
@@ -462,6 +491,178 @@ describe("exec approval handlers", () => {
       undefined,
     );
     expect(resolveRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
+  });
+
+  it("marks gateway full-security requests as critical when gate is enabled", async () => {
+    const { handlers, broadcasts, respond, context } = createExecApprovalFixture({
+      criticalApproval: { enabled: true, env: { OPENCLAW_CRIT_CODE: "ok" } },
+    });
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { host: "gateway", security: "full", twoPhase: true },
+    });
+
+    const requested = broadcasts.find((entry) => entry.event === "exec.approval.requested");
+    const payload = (requested?.payload as { id?: string; request?: { critical?: boolean } }) ?? {};
+    expect(payload.request?.critical).toBe(true);
+    const id = payload.id ?? "";
+    expect(id).not.toBe("");
+
+    const resolveRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id,
+      respond: resolveRespond,
+      context,
+      decision: "deny",
+    });
+    await requestPromise;
+    expect(resolveRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
+  });
+
+  it("rejects critical allow resolve from non-control-ui clients", async () => {
+    const { handlers, broadcasts, respond, context } = createExecApprovalFixture({
+      criticalApproval: {
+        enabled: true,
+        requireControlUi: true,
+        breakGlassEnv: "OPENCLAW_CRIT_CODE",
+        env: { OPENCLAW_CRIT_CODE: "123456" },
+      },
+    });
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { host: "gateway", security: "full", twoPhase: true },
+    });
+    const id = (
+      (broadcasts.find((entry) => entry.event === "exec.approval.requested")?.payload ?? {}) as {
+        id?: string;
+      }
+    ).id;
+    expect(id).toBeTruthy();
+
+    const allowRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: id ?? "",
+      respond: allowRespond,
+      context,
+      approvalCode: "123456",
+    });
+    expect(allowRespond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({
+        code: "INVALID_REQUEST",
+        message: expect.stringContaining("must be resolved from Control UI"),
+      }),
+    );
+
+    const denyRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: id ?? "",
+      respond: denyRespond,
+      context,
+      decision: "deny",
+    });
+    await requestPromise;
+    expect(denyRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
+  });
+
+  it("rejects critical allow resolve when break-glass env is unset", async () => {
+    const { handlers, broadcasts, respond, context } = createExecApprovalFixture({
+      criticalApproval: {
+        enabled: true,
+        requireControlUi: true,
+        breakGlassEnv: "OPENCLAW_CRIT_CODE",
+        env: {},
+      },
+    });
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { host: "gateway", security: "full", twoPhase: true },
+    });
+    const id = (
+      (broadcasts.find((entry) => entry.event === "exec.approval.requested")?.payload ?? {}) as {
+        id?: string;
+      }
+    ).id;
+    expect(id).toBeTruthy();
+
+    const allowRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: id ?? "",
+      respond: allowRespond,
+      context,
+      approvalCode: "123456",
+      client: makeResolveClient(GATEWAY_CLIENT_IDS.CONTROL_UI, "Control UI"),
+    });
+    expect(allowRespond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({
+        code: "INVALID_REQUEST",
+        message: expect.stringContaining("OPENCLAW_CRIT_CODE"),
+      }),
+    );
+
+    const denyRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: id ?? "",
+      respond: denyRespond,
+      context,
+      decision: "deny",
+      client: makeResolveClient(GATEWAY_CLIENT_IDS.CONTROL_UI, "Control UI"),
+    });
+    await requestPromise;
+    expect(denyRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
+  });
+
+  it("allows critical resolve with control-ui client and matching approval code", async () => {
+    const { handlers, broadcasts, respond, context } = createExecApprovalFixture({
+      criticalApproval: {
+        enabled: true,
+        requireControlUi: true,
+        breakGlassEnv: "OPENCLAW_CRIT_CODE",
+        env: { OPENCLAW_CRIT_CODE: "123456" },
+      },
+    });
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { host: "gateway", security: "full", twoPhase: true },
+    });
+    const id = (
+      (broadcasts.find((entry) => entry.event === "exec.approval.requested")?.payload ?? {}) as {
+        id?: string;
+      }
+    ).id;
+    expect(id).toBeTruthy();
+
+    const allowRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: id ?? "",
+      respond: allowRespond,
+      context,
+      approvalCode: "123456",
+      client: makeResolveClient(GATEWAY_CLIENT_IDS.CONTROL_UI, "Control UI"),
+    });
+    await requestPromise;
+    expect(allowRespond).toHaveBeenCalledWith(true, { ok: true }, undefined);
   });
 });
 

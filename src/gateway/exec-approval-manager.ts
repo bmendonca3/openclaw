@@ -13,6 +13,7 @@ export type ExecApprovalRequestPayload = {
   agentId?: string | null;
   resolvedPath?: string | null;
   sessionKey?: string | null;
+  critical?: boolean | null;
 };
 
 export type ExecApprovalRecord = {
