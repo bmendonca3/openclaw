@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createTrackedTempDirs } from "../test-utils/tracked-temp-dirs.js";
 import { writeSkill } from "./skills.e2e-test-helpers.js";
 import { buildWorkspaceSkillSnapshot } from "./skills.js";
+import { computeSkillFingerprint } from "./skills/integrity.js";
 
 const tempDirs = createTrackedTempDirs();
 
@@ -215,5 +216,61 @@ describe("buildWorkspaceSkillSnapshot", () => {
 
     expect(snapshot.skills.map((s) => s.name)).not.toContain("root-big-skill");
     expect(snapshot.prompt).not.toContain("root-big-skill");
+  });
+
+  it("quarantines tampered workspace skills unless fingerprint is explicitly approved", async () => {
+    const workspaceDir = await tempDirs.make("openclaw-");
+    const skillDir = path.join(workspaceDir, "skills", "demo-skill");
+
+    await writeSkill({
+      dir: skillDir,
+      name: "demo-skill",
+      description: "Demo",
+      body: "# v1\n",
+    });
+
+    const initialSnapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+    });
+    expect(initialSnapshot.skills.map((s) => s.name)).toContain("demo-skill");
+
+    await fs.writeFile(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: demo-skill
+description: Demo
+---
+
+# v2
+`,
+      "utf-8",
+    );
+
+    const blockedSnapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+    });
+    expect(blockedSnapshot.skills.map((s) => s.name)).not.toContain("demo-skill");
+    expect(blockedSnapshot.prompt).not.toContain("demo-skill");
+
+    const approvedFingerprint = computeSkillFingerprint(skillDir);
+    const approvedSnapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+      config: {
+        skills: {
+          entries: {
+            "demo-skill": {
+              config: {
+                integrityFingerprint: approvedFingerprint,
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(approvedSnapshot.skills.map((s) => s.name)).toContain("demo-skill");
+    expect(approvedSnapshot.prompt).toContain("demo-skill");
   });
 });
