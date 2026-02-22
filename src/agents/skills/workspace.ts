@@ -18,6 +18,7 @@ import {
   resolveOpenClawMetadata,
   resolveSkillInvocationPolicy,
 } from "./frontmatter.js";
+import { resolveWorkspaceSkillIntegrity } from "./integrity.js";
 import { resolvePluginSkillDirs } from "./plugin-skills.js";
 import { serializeByKey } from "./serialize.js";
 import type {
@@ -365,6 +366,10 @@ function loadSkillEntries(
     dir: workspaceSkillsDir,
     source: "openclaw-workspace",
   });
+  const workspaceSkillIntegrity = resolveWorkspaceSkillIntegrity({
+    workspaceDir,
+    skills: workspaceSkills,
+  });
 
   const merged = new Map<string, Skill>();
   // Precedence: extra < bundled < managed < agents-skills-personal < agents-skills-project < workspace
@@ -400,6 +405,8 @@ function loadSkillEntries(
       frontmatter,
       metadata: resolveOpenClawMetadata(frontmatter),
       invocation: resolveSkillInvocationPolicy(frontmatter),
+      integrity:
+        skill.source === "openclaw-workspace" ? workspaceSkillIntegrity.get(skill.name) : undefined,
     };
   });
   return skillEntries;

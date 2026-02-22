@@ -80,6 +80,14 @@ export function shouldIncludeSkill(params: {
   if (skillConfig?.enabled === false) {
     return false;
   }
+  if (entry.integrity?.mismatch) {
+    const approvedFingerprintRaw = skillConfig?.config?.integrityFingerprint;
+    const approvedFingerprint =
+      typeof approvedFingerprintRaw === "string" ? approvedFingerprintRaw.trim() : "";
+    if (!approvedFingerprint || approvedFingerprint !== entry.integrity.fingerprint) {
+      return false;
+    }
+  }
   if (!isBundledSkillAllowed(entry, allowBundled)) {
     return false;
   }

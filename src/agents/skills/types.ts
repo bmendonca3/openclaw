@@ -68,6 +68,10 @@ export type SkillEntry = {
   frontmatter: ParsedSkillFrontmatter;
   metadata?: OpenClawSkillMetadata;
   invocation?: SkillInvocationPolicy;
+  integrity?: {
+    fingerprint: string;
+    mismatch: boolean;
+  };
 };
 
 export type SkillEligibilityContext = {
