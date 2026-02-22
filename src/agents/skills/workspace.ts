@@ -20,6 +20,7 @@ import {
 } from "./frontmatter.js";
 import { resolvePluginSkillDirs } from "./plugin-skills.js";
 import { serializeByKey } from "./serialize.js";
+import { verifySkillSignature } from "./signature.js";
 import type {
   ParsedSkillFrontmatter,
   SkillEligibilityContext,
@@ -395,11 +396,20 @@ function loadSkillEntries(
     } catch {
       // ignore malformed skills
     }
+    const signature = verifySkillSignature(skill.baseDir);
+    if (signature.status === "invalid") {
+      skillsLogger.warn("Quarantining skill due to invalid signature.", {
+        skill: skill.name,
+        source: skill.source,
+        reason: signature.reason,
+      });
+    }
     return {
       skill,
       frontmatter,
       metadata: resolveOpenClawMetadata(frontmatter),
       invocation: resolveSkillInvocationPolicy(frontmatter),
+      signature,
     };
   });
   return skillEntries;

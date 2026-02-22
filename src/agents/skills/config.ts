@@ -80,6 +80,9 @@ export function shouldIncludeSkill(params: {
   if (skillConfig?.enabled === false) {
     return false;
   }
+  if (entry.signature?.status === "invalid") {
+    return false;
+  }
   if (!isBundledSkillAllowed(entry, allowBundled)) {
     return false;
   }
