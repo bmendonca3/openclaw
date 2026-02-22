@@ -37,6 +37,11 @@ export type SkillInvocationPolicy = {
   disableModelInvocation: boolean;
 };
 
+export type SkillCapabilityManifest = {
+  requiredTools?: string[];
+  requiresSandbox?: boolean;
+};
+
 export type SkillCommandDispatchSpec = {
   kind: "tool";
   /** Name of the tool to invoke (AnyAgentTool.name). */
@@ -68,6 +73,7 @@ export type SkillEntry = {
   frontmatter: ParsedSkillFrontmatter;
   metadata?: OpenClawSkillMetadata;
   invocation?: SkillInvocationPolicy;
+  capabilities?: SkillCapabilityManifest;
 };
 
 export type SkillEligibilityContext = {

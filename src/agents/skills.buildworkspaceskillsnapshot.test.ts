@@ -216,4 +216,71 @@ describe("buildWorkspaceSkillSnapshot", () => {
     expect(snapshot.skills.map((s) => s.name)).not.toContain("root-big-skill");
     expect(snapshot.prompt).not.toContain("root-big-skill");
   });
+
+  it("skips skills when required tools are blocked by policy", async () => {
+    const workspaceDir = await tempDirs.make("openclaw-");
+    await writeSkill({
+      dir: path.join(workspaceDir, "skills", "needs-exec"),
+      name: "needs-exec",
+      description: "Requires exec tool",
+      frontmatterExtra: "required-tools: exec",
+    });
+
+    const snapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      config: {
+        tools: {
+          deny: ["exec"],
+        },
+      },
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+    });
+
+    expect(snapshot.skills.map((s) => s.name)).not.toContain("needs-exec");
+    expect(snapshot.prompt).not.toContain("needs-exec");
+  });
+
+  it("skips sandbox-required skills when sandbox is disabled", async () => {
+    const workspaceDir = await tempDirs.make("openclaw-");
+    await writeSkill({
+      dir: path.join(workspaceDir, "skills", "sandboxed-skill"),
+      name: "sandboxed-skill",
+      description: "Needs sandbox",
+      frontmatterExtra: "requires-sandbox: true",
+    });
+
+    const blockedSnapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      config: {
+        agents: {
+          defaults: {
+            sandbox: {
+              mode: "off",
+            },
+          },
+        },
+      },
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+    });
+
+    expect(blockedSnapshot.skills.map((s) => s.name)).not.toContain("sandboxed-skill");
+    expect(blockedSnapshot.prompt).not.toContain("sandboxed-skill");
+
+    const allowedSnapshot = buildWorkspaceSkillSnapshot(workspaceDir, {
+      config: {
+        agents: {
+          defaults: {
+            sandbox: {
+              mode: "non-main",
+            },
+          },
+        },
+      },
+      managedSkillsDir: path.join(workspaceDir, ".managed"),
+      bundledSkillsDir: path.join(workspaceDir, ".bundled"),
+    });
+
+    expect(allowedSnapshot.skills.map((s) => s.name)).toContain("sandboxed-skill");
+    expect(allowedSnapshot.prompt).toContain("sandboxed-skill");
+  });
 });

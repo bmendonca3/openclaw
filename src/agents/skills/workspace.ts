@@ -15,6 +15,7 @@ import { shouldIncludeSkill } from "./config.js";
 import { normalizeSkillFilter } from "./filter.js";
 import {
   parseFrontmatter,
+  resolveSkillCapabilities,
   resolveOpenClawMetadata,
   resolveSkillInvocationPolicy,
 } from "./frontmatter.js";
@@ -400,6 +401,7 @@ function loadSkillEntries(
       frontmatter,
       metadata: resolveOpenClawMetadata(frontmatter),
       invocation: resolveSkillInvocationPolicy(frontmatter),
+      capabilities: resolveSkillCapabilities(frontmatter),
     };
   });
   return skillEntries;

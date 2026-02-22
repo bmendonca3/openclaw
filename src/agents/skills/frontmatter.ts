@@ -1,4 +1,5 @@
 import type { Skill } from "@mariozechner/pi-coding-agent";
+import JSON5 from "json5";
 import { parseFrontmatterBlock } from "../../markdown/frontmatter.js";
 import {
   getFrontmatterString,
@@ -10,9 +11,12 @@ import {
   resolveOpenClawManifestOs,
   resolveOpenClawManifestRequires,
 } from "../../shared/frontmatter.js";
+import { parseBooleanValue } from "../../utils/boolean.js";
+import { normalizeToolName } from "../tool-policy.js";
 import type {
   OpenClawSkillMetadata,
   ParsedSkillFrontmatter,
+  SkillCapabilityManifest,
   SkillEntry,
   SkillInstallSpec,
   SkillInvocationPolicy,
@@ -109,6 +113,103 @@ export function resolveSkillInvocationPolicy(
       getFrontmatterString(frontmatter, "disable-model-invocation"),
       false,
     ),
+  };
+}
+
+function parseStructuredFrontmatterValue(value: string | undefined): unknown {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const looksStructured =
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"));
+  if (!looksStructured) {
+    return undefined;
+  }
+  try {
+    return JSON5.parse(trimmed);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeCapabilityTools(value: unknown): string[] {
+  if (!value) {
+    return [];
+  }
+  const parsed =
+    typeof value === "string" ? (parseStructuredFrontmatterValue(value) ?? value) : value;
+  const normalized = normalizeStringList(parsed)
+    .map((toolName) => normalizeToolName(toolName))
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
+}
+
+function parseCapabilityBool(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return parseBooleanValue(value);
+}
+
+function resolveCapabilityBlock(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const parsed = parseStructuredFrontmatterValue(value);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return parsed as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+export function resolveSkillCapabilities(
+  frontmatter: ParsedSkillFrontmatter,
+): SkillCapabilityManifest | undefined {
+  const metadataObj = resolveOpenClawManifestBlock({ frontmatter });
+  const metadataCapabilities = resolveCapabilityBlock(metadataObj?.capabilities);
+  const frontmatterCapabilities = resolveCapabilityBlock(
+    getFrontmatterString(frontmatter, "capabilities"),
+  );
+
+  const requiredTools = Array.from(
+    new Set([
+      ...normalizeCapabilityTools(metadataCapabilities?.requiredTools),
+      ...normalizeCapabilityTools(metadataCapabilities?.required_tools),
+      ...normalizeCapabilityTools(frontmatterCapabilities?.requiredTools),
+      ...normalizeCapabilityTools(frontmatterCapabilities?.required_tools),
+      ...normalizeCapabilityTools(getFrontmatterString(frontmatter, "required-tools")),
+      ...normalizeCapabilityTools(getFrontmatterString(frontmatter, "required_tools")),
+      ...normalizeCapabilityTools(getFrontmatterString(frontmatter, "requiredTools")),
+    ]),
+  );
+
+  const requiresSandboxFlags = [
+    parseCapabilityBool(metadataCapabilities?.requiresSandbox),
+    parseCapabilityBool(metadataCapabilities?.requires_sandbox),
+    parseCapabilityBool(frontmatterCapabilities?.requiresSandbox),
+    parseCapabilityBool(frontmatterCapabilities?.requires_sandbox),
+    parseCapabilityBool(getFrontmatterString(frontmatter, "requires-sandbox")),
+    parseCapabilityBool(getFrontmatterString(frontmatter, "requires_sandbox")),
+    parseCapabilityBool(getFrontmatterString(frontmatter, "requiresSandbox")),
+  ].filter((value): value is boolean => value !== undefined);
+  const requiresSandbox =
+    requiresSandboxFlags.length > 0 ? requiresSandboxFlags.some((value) => value) : undefined;
+
+  if (requiredTools.length === 0 && requiresSandbox === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...(requiredTools.length > 0 ? { requiredTools } : {}),
+    ...(requiresSandbox === undefined ? {} : { requiresSandbox }),
   };
 }
 

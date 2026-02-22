@@ -6,6 +6,8 @@ import {
   resolveConfigPath,
   resolveRuntimePlatform,
 } from "../../shared/config-eval.js";
+import { isToolAllowedByPolicies, resolveEffectiveToolPolicy } from "../pi-tools.policy.js";
+import { resolveToolProfilePolicy } from "../tool-policy.js";
 import { resolveSkillKey } from "./frontmatter.js";
 import type { SkillEligibilityContext, SkillEntry } from "./types.js";
 
@@ -67,6 +69,55 @@ export function isBundledSkillAllowed(entry: SkillEntry, allowlist?: string[]): 
   return allowlist.includes(key) || allowlist.includes(entry.skill.name);
 }
 
+function isSandboxCapabilityAvailable(config?: OpenClawConfig): boolean {
+  const defaultMode = config?.agents?.defaults?.sandbox?.mode;
+  if (defaultMode && defaultMode !== "off") {
+    return true;
+  }
+  for (const agent of config?.agents?.list ?? []) {
+    if (agent?.sandbox?.mode && agent.sandbox.mode !== "off") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function resolveToolsProfilePolicy(params: { profile?: string; profileAlsoAllow?: string[] }) {
+  const profilePolicy = resolveToolProfilePolicy(params.profile);
+  if (!profilePolicy) {
+    return undefined;
+  }
+  const alsoAllow = params.profileAlsoAllow ?? [];
+  if (alsoAllow.length === 0) {
+    return profilePolicy;
+  }
+  return {
+    ...profilePolicy,
+    allow: Array.from(new Set([...(profilePolicy.allow ?? []), ...alsoAllow])),
+  };
+}
+
+function areSkillCapabilitiesSatisfied(entry: SkillEntry, config?: OpenClawConfig): boolean {
+  const capabilities = entry.capabilities;
+  if (!capabilities) {
+    return true;
+  }
+  if (capabilities.requiresSandbox === true && !isSandboxCapabilityAvailable(config)) {
+    return false;
+  }
+  if (!capabilities.requiredTools || capabilities.requiredTools.length === 0) {
+    return true;
+  }
+  const effective = resolveEffectiveToolPolicy({ config });
+  const profilePolicy = resolveToolsProfilePolicy({
+    profile: effective.profile,
+    profileAlsoAllow: effective.profileAlsoAllow,
+  });
+  return capabilities.requiredTools.every((toolName) =>
+    isToolAllowedByPolicies(toolName, [effective.globalPolicy, profilePolicy]),
+  );
+}
+
 export function shouldIncludeSkill(params: {
   entry: SkillEntry;
   config?: OpenClawConfig;
@@ -81,6 +132,9 @@ export function shouldIncludeSkill(params: {
     return false;
   }
   if (!isBundledSkillAllowed(entry, allowBundled)) {
+    return false;
+  }
+  if (!areSkillCapabilitiesSatisfied(entry, config)) {
     return false;
   }
   return evaluateRuntimeEligibility({
