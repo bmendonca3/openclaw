@@ -41,6 +41,7 @@ export async function noteSecurityWarnings(cfg: OpenClawConfig) {
   const hasSharedSecret =
     (resolvedAuth.mode === "token" && hasToken) ||
     (resolvedAuth.mode === "password" && hasPassword);
+  const tlsEnabled = cfg.gateway?.tls?.enabled === true;
   const bindDescriptor = `"${gatewayBind}" (${resolvedBindHost})`;
   const saferRemoteAccessLines = [
     "  Safer remote access: keep bind loopback and use Tailscale Serve/Funnel or an SSH tunnel.",
@@ -75,6 +76,14 @@ export async function noteSecurityWarnings(cfg: OpenClawConfig) {
         `- WARNING: Gateway bound to ${bindDescriptor} (network-accessible).`,
         `  Ensure your auth credentials are strong and not exposed.`,
         ...saferRemoteAccessLines,
+      );
+    }
+
+    if (!tlsEnabled) {
+      warnings.push(
+        `- WARNING: Gateway transport is plaintext ws:// on ${bindDescriptor}.`,
+        `  Use wss:// (gateway.tls.enabled=true) or an SSH tunnel for remote access.`,
+        `  Fix: ${formatCliCommand("openclaw config set gateway.tls.enabled true")}`,
       );
     }
   }

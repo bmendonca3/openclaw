@@ -61,6 +61,23 @@ describe("noteSecurityWarnings gateway exposure", () => {
     expect(message).not.toContain("CRITICAL");
   });
 
+  it("warns when exposed gateway uses plaintext ws transport", async () => {
+    process.env.OPENCLAW_GATEWAY_TOKEN = "token-123";
+    const cfg = { gateway: { bind: "lan" } } as OpenClawConfig;
+    await noteSecurityWarnings(cfg);
+    const message = lastMessage();
+    expect(message).toContain("plaintext ws://");
+    expect(message).toContain("gateway.tls.enabled");
+  });
+
+  it("does not emit plaintext ws warning when TLS is enabled", async () => {
+    process.env.OPENCLAW_GATEWAY_TOKEN = "token-123";
+    const cfg = { gateway: { bind: "lan", tls: { enabled: true } } } as OpenClawConfig;
+    await noteSecurityWarnings(cfg);
+    const message = lastMessage();
+    expect(message).not.toContain("plaintext ws://");
+  });
+
   it("treats whitespace token as missing", async () => {
     const cfg = {
       gateway: { bind: "lan", auth: { mode: "token", token: "   " } },
