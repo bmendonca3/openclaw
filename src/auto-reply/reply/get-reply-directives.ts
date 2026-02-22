@@ -17,7 +17,11 @@ import { clearExecInlineDirectives, clearInlineDirectives } from "./get-reply-di
 import { defaultGroupActivation, resolveGroupRequireMention } from "./groups.js";
 import { CURRENT_MESSAGE_MARKER, stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { createModelSelectionState, resolveContextTokens } from "./model-selection.js";
-import { formatElevatedUnavailableMessage, resolveElevatedPermissions } from "./reply-elevated.js";
+import {
+  formatElevatedUnavailableMessage,
+  resolveEffectiveElevatedExecLevel,
+  resolveElevatedPermissions,
+} from "./reply-elevated.js";
 import { stripInlineStatus } from "./reply-inline.js";
 import type { TypingController } from "./typing.js";
 
@@ -349,12 +353,12 @@ export async function resolveReplyDirectives(params: {
     directives.reasoningLevel ??
     (sessionEntry?.reasoningLevel as ReasoningLevel | undefined) ??
     "off";
-  const resolvedElevatedLevel = elevatedAllowed
-    ? (directives.elevatedLevel ??
-      (sessionEntry?.elevatedLevel as ElevatedLevel | undefined) ??
-      (agentCfg?.elevatedDefault as ElevatedLevel | undefined) ??
-      "on")
-    : "off";
+  const resolvedElevatedLevel = resolveEffectiveElevatedExecLevel({
+    directiveLevel: directives.hasElevatedDirective ? directives.elevatedLevel : undefined,
+    sessionEntry,
+    fallbackLevel: (agentCfg?.elevatedDefault as ElevatedLevel | undefined) ?? "on",
+    elevatedAllowed,
+  });
   const resolvedBlockStreaming =
     opts?.disableBlockStreaming === true
       ? "off"

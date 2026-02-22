@@ -3,9 +3,11 @@ import { getChannelDock } from "../../channels/dock.js";
 import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { CHAT_CHANNEL_ORDER } from "../../channels/registry.js";
 import type { AgentElevatedAllowFromConfig, OpenClawConfig } from "../../config/config.js";
+import type { SessionEntry } from "../../config/sessions.js";
 import { normalizeAtHashSlug } from "../../shared/string-normalization.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import type { MsgContext } from "../templating.js";
+import type { ElevatedLevel } from "./directives.js";
 export { formatElevatedUnavailableMessage } from "./elevated-unavailable.js";
 
 function normalizeAllowToken(value?: string) {
@@ -27,6 +29,164 @@ const SENDER_PREFIXES = [
   "channel",
 ];
 const SENDER_PREFIX_RE = new RegExp(`^(${SENDER_PREFIXES.join("|")}):`, "i");
+export const ELEVATED_EXEC_TOOL = "exec";
+const DEFAULT_ELEVATED_TTL_MS = 120_000;
+const MIN_ELEVATED_TTL_MS = 10_000;
+const MAX_ELEVATED_TTL_MS = 15 * 60 * 1000;
+
+function clampElevatedTtlMs(value: number) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_ELEVATED_TTL_MS;
+  }
+  const rounded = Math.trunc(value);
+  if (rounded <= 0) {
+    return DEFAULT_ELEVATED_TTL_MS;
+  }
+  return Math.max(MIN_ELEVATED_TTL_MS, Math.min(MAX_ELEVATED_TTL_MS, rounded));
+}
+
+function mapLevelToGrant(level: ElevatedLevel | undefined): "off" | "ask" | "full" {
+  if (level === "full") {
+    return "full";
+  }
+  if (level === "ask" || level === "on") {
+    return "ask";
+  }
+  return "off";
+}
+
+function resolveRequestedLevel(level: ElevatedLevel | undefined): ElevatedLevel {
+  if (level === "off" || level === "ask" || level === "full" || level === "on") {
+    return level;
+  }
+  return "off";
+}
+
+type ElevatedSessionState = {
+  elevatedLevel?: unknown;
+  elevatedGrants?: unknown;
+};
+
+export function resolveElevatedGrantTtlMs(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+}): number {
+  const agentTtl = resolveAgentConfig(params.cfg, params.agentId)?.tools?.elevated?.ttlMs;
+  const globalTtl = params.cfg.tools?.elevated?.ttlMs;
+  const raw = typeof agentTtl === "number" ? agentTtl : globalTtl;
+  return typeof raw === "number" ? clampElevatedTtlMs(raw) : DEFAULT_ELEVATED_TTL_MS;
+}
+
+export function setSessionElevatedToolGrant(params: {
+  sessionEntry: SessionEntry;
+  toolName: string;
+  level: "ask" | "full";
+  ttlMs: number;
+  now?: number;
+}) {
+  const now = params.now ?? Date.now();
+  const expiresAt = now + clampElevatedTtlMs(params.ttlMs);
+  const existing = sessionEntryGrants(params.sessionEntry);
+  existing[params.toolName] = {
+    level: params.level,
+    issuedAt: now,
+    expiresAt,
+  };
+}
+
+export function clearSessionElevatedToolGrant(params: {
+  sessionEntry: SessionEntry;
+  toolName: string;
+}) {
+  if (!params.sessionEntry.elevatedGrants) {
+    return;
+  }
+  delete params.sessionEntry.elevatedGrants[params.toolName];
+  if (Object.keys(params.sessionEntry.elevatedGrants).length === 0) {
+    delete params.sessionEntry.elevatedGrants;
+  }
+}
+
+function sessionEntryGrants(
+  sessionEntry: SessionEntry,
+): NonNullable<SessionEntry["elevatedGrants"]> {
+  if (!sessionEntry.elevatedGrants) {
+    sessionEntry.elevatedGrants = {};
+  }
+  return sessionEntry.elevatedGrants;
+}
+
+export function resolveSessionElevatedToolGrant(params: {
+  sessionEntry?: ElevatedSessionState;
+  toolName: string;
+  now?: number;
+}): "off" | "ask" | "full" {
+  const grants = params.sessionEntry?.elevatedGrants;
+  if (!grants || typeof grants !== "object" || Array.isArray(grants)) {
+    return "off";
+  }
+  const entry = (grants as Record<string, unknown>)[params.toolName];
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return "off";
+  }
+  const level = (entry as { level?: unknown }).level;
+  const expiresAt = (entry as { expiresAt?: unknown }).expiresAt;
+  if (level !== "ask" && level !== "full") {
+    return "off";
+  }
+  const now = params.now ?? Date.now();
+  if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt) || expiresAt <= now) {
+    return "off";
+  }
+  return level === "full" ? "full" : "ask";
+}
+
+export function resolveEffectiveElevatedExecLevel(params: {
+  directiveLevel?: ElevatedLevel;
+  sessionEntry?: ElevatedSessionState;
+  fallbackLevel?: ElevatedLevel;
+  elevatedAllowed: boolean;
+  now?: number;
+}): ElevatedLevel {
+  if (!params.elevatedAllowed) {
+    return "off";
+  }
+
+  const directiveLevel = resolveRequestedLevel(params.directiveLevel);
+  if (params.directiveLevel !== undefined) {
+    const mapped = mapLevelToGrant(directiveLevel);
+    if (mapped === "full") {
+      return "full";
+    }
+    if (mapped === "ask") {
+      return "ask";
+    }
+    return "off";
+  }
+
+  const sessionLevel = resolveRequestedLevel(params.sessionEntry?.elevatedLevel as ElevatedLevel);
+  const hasSessionOverride = typeof params.sessionEntry?.elevatedLevel === "string";
+  if (hasSessionOverride && sessionLevel === "off") {
+    return "off";
+  }
+  if (sessionLevel !== "off") {
+    const grant = resolveSessionElevatedToolGrant({
+      sessionEntry: params.sessionEntry,
+      toolName: ELEVATED_EXEC_TOOL,
+      now: params.now,
+    });
+    if (grant === "off") {
+      return "off";
+    }
+    if (sessionLevel === "full") {
+      return grant === "full" ? "full" : "ask";
+    }
+    return "ask";
+  }
+
+  const fallback = resolveRequestedLevel(params.fallbackLevel);
+  return fallback === "off" ? "off" : fallback;
+}
 
 function stripSenderPrefix(value?: string) {
   if (!value) {

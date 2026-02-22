@@ -248,6 +248,8 @@ export type AgentToolsConfig = {
     enabled?: boolean;
     /** Approved senders for /elevated (per-provider allowlists). */
     allowFrom?: AgentElevatedAllowFromConfig;
+    /** TTL for elevated tool grants in milliseconds (default: 120000). */
+    ttlMs?: number;
   };
   /** Exec tool defaults for this agent. */
   exec?: ExecToolConfig;
@@ -510,6 +512,8 @@ export type ToolsConfig = {
     enabled?: boolean;
     /** Approved senders for /elevated (per-provider allowlists). */
     allowFrom?: AgentElevatedAllowFromConfig;
+    /** TTL for elevated tool grants in milliseconds (default: 120000). */
+    ttlMs?: number;
   };
   /** Exec tool defaults. */
   exec?: ExecToolConfig;

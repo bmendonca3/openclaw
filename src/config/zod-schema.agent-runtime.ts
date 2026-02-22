@@ -451,6 +451,7 @@ export const AgentToolsSchema = z
       .object({
         enabled: z.boolean().optional(),
         allowFrom: ElevatedAllowFromSchema,
+        ttlMs: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),
@@ -694,6 +695,7 @@ export const ToolsSchema = z
       .object({
         enabled: z.boolean().optional(),
         allowFrom: ElevatedAllowFromSchema,
+        ttlMs: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),

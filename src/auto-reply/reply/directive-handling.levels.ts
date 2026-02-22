@@ -1,4 +1,5 @@
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../thinking.js";
+import { resolveEffectiveElevatedExecLevel } from "./reply-elevated.js";
 
 export async function resolveCurrentDirectiveLevels(params: {
   sessionEntry?: {
@@ -6,6 +7,7 @@ export async function resolveCurrentDirectiveLevels(params: {
     verboseLevel?: unknown;
     reasoningLevel?: unknown;
     elevatedLevel?: unknown;
+    elevatedGrants?: unknown;
   };
   agentCfg?: {
     thinkingDefault?: unknown;
@@ -13,6 +15,7 @@ export async function resolveCurrentDirectiveLevels(params: {
     elevatedDefault?: unknown;
   };
   resolveDefaultThinkingLevel: () => Promise<ThinkLevel | undefined>;
+  elevatedAllowed?: boolean;
 }): Promise<{
   currentThinkLevel: ThinkLevel | undefined;
   currentVerboseLevel: VerboseLevel | undefined;
@@ -29,9 +32,11 @@ export async function resolveCurrentDirectiveLevels(params: {
     (params.agentCfg?.verboseDefault as VerboseLevel | undefined);
   const currentReasoningLevel =
     (params.sessionEntry?.reasoningLevel as ReasoningLevel | undefined) ?? "off";
-  const currentElevatedLevel =
-    (params.sessionEntry?.elevatedLevel as ElevatedLevel | undefined) ??
-    (params.agentCfg?.elevatedDefault as ElevatedLevel | undefined);
+  const currentElevatedLevel = resolveEffectiveElevatedExecLevel({
+    sessionEntry: params.sessionEntry,
+    fallbackLevel: params.agentCfg?.elevatedDefault as ElevatedLevel | undefined,
+    elevatedAllowed: params.elevatedAllowed !== false,
+  });
   return {
     currentThinkLevel,
     currentVerboseLevel,

@@ -26,6 +26,12 @@ import {
   withOptions,
 } from "./directive-handling.shared.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel } from "./directives.js";
+import {
+  ELEVATED_EXEC_TOOL,
+  clearSessionElevatedToolGrant,
+  resolveElevatedGrantTtlMs,
+  setSessionElevatedToolGrant,
+} from "./reply-elevated.js";
 
 function resolveExecDefaults(params: {
   cfg: OpenClawConfig;
@@ -303,6 +309,20 @@ export async function handleDirectiveOnly(
     // Unlike other toggles, elevated defaults can be "on".
     // Persist "off" explicitly so `/elevated off` actually overrides defaults.
     sessionEntry.elevatedLevel = directives.elevatedLevel;
+    const elevatedGrantLevel = directives.elevatedLevel === "full" ? "full" : "ask";
+    if (directives.elevatedLevel === "off") {
+      clearSessionElevatedToolGrant({
+        sessionEntry,
+        toolName: ELEVATED_EXEC_TOOL,
+      });
+    } else {
+      setSessionElevatedToolGrant({
+        sessionEntry,
+        toolName: ELEVATED_EXEC_TOOL,
+        level: elevatedGrantLevel,
+        ttlMs: resolveElevatedGrantTtlMs({ cfg: params.cfg, agentId: activeAgentId }),
+      });
+    }
     elevatedChanged =
       elevatedChanged ||
       (directives.elevatedLevel !== prevElevatedLevel && directives.elevatedLevel !== undefined);

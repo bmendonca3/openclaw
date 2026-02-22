@@ -21,6 +21,12 @@ import { resolveProfileOverride } from "./directive-handling.auth.js";
 import type { InlineDirectives } from "./directive-handling.parse.js";
 import { enqueueModeSwitchEvents } from "./directive-handling.shared.js";
 import type { ElevatedLevel, ReasoningLevel } from "./directives.js";
+import {
+  ELEVATED_EXEC_TOOL,
+  clearSessionElevatedToolGrant,
+  resolveElevatedGrantTtlMs,
+  setSessionElevatedToolGrant,
+} from "./reply-elevated.js";
 
 export async function persistInlineDirectives(params: {
   directives: InlineDirectives;
@@ -109,6 +115,20 @@ export async function persistInlineDirectives(params: {
     ) {
       // Persist "off" explicitly so inline `/elevated off` overrides defaults.
       sessionEntry.elevatedLevel = directives.elevatedLevel;
+      const elevatedGrantLevel = directives.elevatedLevel === "full" ? "full" : "ask";
+      if (directives.elevatedLevel === "off") {
+        clearSessionElevatedToolGrant({
+          sessionEntry,
+          toolName: ELEVATED_EXEC_TOOL,
+        });
+      } else {
+        setSessionElevatedToolGrant({
+          sessionEntry,
+          toolName: ELEVATED_EXEC_TOOL,
+          level: elevatedGrantLevel,
+          ttlMs: resolveElevatedGrantTtlMs({ cfg, agentId: activeAgentId }),
+        });
+      }
       elevatedChanged =
         elevatedChanged ||
         (directives.elevatedLevel !== prevElevatedLevel && directives.elevatedLevel !== undefined);

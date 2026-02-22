@@ -22,6 +22,12 @@ export type SessionOrigin = {
   threadId?: string | number;
 };
 
+export type SessionElevatedToolGrant = {
+  level: "ask" | "full";
+  issuedAt: number;
+  expiresAt: number;
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -44,6 +50,7 @@ export type SessionEntry = {
   verboseLevel?: string;
   reasoningLevel?: string;
   elevatedLevel?: string;
+  elevatedGrants?: Record<string, SessionElevatedToolGrant>;
   ttsAuto?: TtsAutoMode;
   execHost?: string;
   execSecurity?: string;
