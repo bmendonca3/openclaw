@@ -904,6 +904,70 @@ describe("security audit", () => {
     expectFinding(res, "tools.profile_minimal_overridden", "warn");
   });
 
+  it("flags lockdown profile invariant drift", async () => {
+    const cfg: OpenClawConfig = {
+      gateway: {
+        bind: "lan",
+        tailscale: { mode: "serve" },
+      },
+      tools: {
+        profile: "lockdown",
+        deny: ["browser"],
+      },
+      agents: {
+        defaults: {
+          sandbox: {
+            mode: "off",
+          },
+        },
+      },
+      channels: {
+        whatsapp: {
+          dmPolicy: "open",
+        },
+      },
+    };
+
+    const res = await audit(cfg);
+    expectFinding(res, "tools.profile_lockdown.bind_not_loopback", "critical");
+    expectFinding(res, "tools.profile_lockdown.tailscale_not_off", "critical");
+    expectFinding(res, "tools.profile_lockdown.missing_deny_entries", "critical");
+    expectFinding(res, "tools.profile_lockdown.sandbox_not_all", "critical");
+    expectFinding(res, "tools.profile_lockdown.dm_policy_not_pairing", "warn");
+  });
+
+  it("does not flag lockdown profile when baseline invariants are satisfied", async () => {
+    const cfg: OpenClawConfig = {
+      gateway: {
+        bind: "loopback",
+        tailscale: { mode: "off" },
+      },
+      tools: {
+        profile: "lockdown",
+        deny: ["exec", "nodes", "browser"],
+      },
+      agents: {
+        defaults: {
+          sandbox: {
+            mode: "all",
+          },
+        },
+      },
+      channels: {
+        whatsapp: {
+          dmPolicy: "pairing",
+        },
+      },
+    };
+
+    const res = await audit(cfg);
+    expectNoFinding(res, "tools.profile_lockdown.bind_not_loopback");
+    expectNoFinding(res, "tools.profile_lockdown.tailscale_not_off");
+    expectNoFinding(res, "tools.profile_lockdown.missing_deny_entries");
+    expectNoFinding(res, "tools.profile_lockdown.sandbox_not_all");
+    expectNoFinding(res, "tools.profile_lockdown.dm_policy_not_pairing");
+  });
+
   it("flags tools.elevated allowFrom wildcard as critical", async () => {
     const cfg: OpenClawConfig = {
       tools: {

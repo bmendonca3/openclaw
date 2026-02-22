@@ -136,6 +136,8 @@ export type OnboardOptions = {
   gatewayAuth?: GatewayAuthChoice;
   gatewayToken?: string;
   gatewayPassword?: string;
+  /** Apply secure lockdown defaults (loopback bind + lockdown tool profile + sandbox all). */
+  lockdown?: boolean;
   tailscale?: TailscaleMode;
   tailscaleResetOnExit?: boolean;
   installDaemon?: boolean;

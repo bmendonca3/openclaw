@@ -95,6 +95,11 @@ export function registerOnboardCommand(program: Command) {
     .option("--gateway-auth <mode>", "Gateway auth: token|password")
     .option("--gateway-token <token>", "Gateway token (token auth)")
     .option("--gateway-password <password>", "Gateway password (password auth)")
+    .option(
+      "--lockdown",
+      "Apply lockdown defaults (loopback bind, tools.profile=lockdown, sandbox=all)",
+      false,
+    )
     .option("--remote-url <url>", "Remote Gateway WebSocket URL")
     .option("--remote-token <token>", "Remote Gateway token (optional)")
     .option("--tailscale <mode>", "Tailscale: off|serve|funnel")
@@ -165,6 +170,7 @@ export function registerOnboardCommand(program: Command) {
           gatewayAuth: opts.gatewayAuth as GatewayAuthChoice | undefined,
           gatewayToken: opts.gatewayToken as string | undefined,
           gatewayPassword: opts.gatewayPassword as string | undefined,
+          lockdown: Boolean(opts.lockdown),
           remoteUrl: opts.remoteUrl as string | undefined,
           remoteToken: opts.remoteToken as string | undefined,
           tailscale: opts.tailscale as TailscaleMode | undefined,

@@ -55,7 +55,10 @@ describe("tool-policy", () => {
 
   it("resolves known profiles and ignores unknown ones", () => {
     const coding = resolveToolProfilePolicy("coding");
+    const lockdown = resolveToolProfilePolicy("lockdown");
     expect(coding?.allow).toContain("group:fs");
+    expect(lockdown?.allow).toContain("group:messaging");
+    expect(lockdown?.deny).toContain("group:runtime");
     expect(resolveToolProfilePolicy("nope")).toBeUndefined();
   });
 

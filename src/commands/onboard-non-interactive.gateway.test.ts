@@ -149,6 +149,43 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     });
   }, 60_000);
 
+  it("applies lockdown baseline when --lockdown is enabled", async () => {
+    await withStateDir("state-lockdown-", async (stateDir) => {
+      const token = "tok_lockdown_123";
+      const workspace = path.join(stateDir, "openclaw");
+
+      await runNonInteractiveOnboarding(
+        {
+          nonInteractive: true,
+          mode: "local",
+          workspace,
+          authChoice: "skip",
+          skipSkills: true,
+          skipHealth: true,
+          installDaemon: false,
+          gatewayBind: "lan",
+          gatewayAuth: "token",
+          gatewayToken: token,
+          lockdown: true,
+        },
+        runtime,
+      );
+
+      const configPath = resolveStateConfigPath(process.env, stateDir);
+      const cfg = await readJsonFile<{
+        gateway?: { bind?: string; tailscale?: { mode?: string } };
+        tools?: { profile?: string; deny?: string[] };
+        agents?: { defaults?: { sandbox?: { mode?: string } } };
+      }>(configPath);
+
+      expect(cfg?.gateway?.bind).toBe("loopback");
+      expect(cfg?.gateway?.tailscale?.mode).toBe("off");
+      expect(cfg?.tools?.profile).toBe("lockdown");
+      expect(cfg?.tools?.deny).toEqual(expect.arrayContaining(["exec", "nodes", "browser"]));
+      expect(cfg?.agents?.defaults?.sandbox?.mode).toBe("all");
+    });
+  }, 60_000);
+
   it("writes gateway.remote url/token and callGateway uses them", async () => {
     await withStateDir("state-remote-", async () => {
       const port = getPseudoPort(30_000);

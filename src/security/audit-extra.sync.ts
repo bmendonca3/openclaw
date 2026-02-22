@@ -258,6 +258,49 @@ function resolveToolPolicies(params: {
   return policies;
 }
 
+const LOCKDOWN_REQUIRED_DENY = ["exec", "nodes", "browser"] as const;
+
+function normalizeToolListForAudit(list: unknown): Set<string> {
+  if (!Array.isArray(list)) {
+    return new Set();
+  }
+  const out = new Set<string>();
+  for (const raw of list) {
+    if (typeof raw !== "string") {
+      continue;
+    }
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized) {
+      continue;
+    }
+    out.add(normalized);
+  }
+  return out;
+}
+
+function collectNonPairingDmPolicies(cfg: OpenClawConfig): string[] {
+  const channels = cfg.channels as Record<string, unknown> | undefined;
+  if (!channels || typeof channels !== "object") {
+    return [];
+  }
+  const out: string[] = [];
+  for (const [channel, raw] of Object.entries(channels)) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+    const dmPolicy = (raw as { dmPolicy?: unknown }).dmPolicy;
+    if (typeof dmPolicy !== "string") {
+      continue;
+    }
+    const normalized = dmPolicy.trim().toLowerCase();
+    if (!normalized || normalized === "pairing" || normalized === "disabled") {
+      continue;
+    }
+    out.push(`${channel}:${normalized}`);
+  }
+  return out;
+}
+
 function hasWebSearchKey(cfg: OpenClawConfig, env: NodeJS.ProcessEnv): boolean {
   const search = cfg.tools?.web?.search;
   return Boolean(
@@ -877,6 +920,73 @@ export function collectMinimalProfileOverrideFindings(cfg: OpenClawConfig): Secu
     remediation:
       'Set those agents to `tools.profile="minimal"` (or remove the agent override) if you want minimal tools enforced globally.',
   });
+
+  return findings;
+}
+
+export function collectLockdownProfileFindings(cfg: OpenClawConfig): SecurityAuditFinding[] {
+  const findings: SecurityAuditFinding[] = [];
+  if (cfg.tools?.profile !== "lockdown") {
+    return findings;
+  }
+
+  const bind = cfg.gateway?.bind ?? "loopback";
+  if (bind !== "loopback") {
+    findings.push({
+      checkId: "tools.profile_lockdown.bind_not_loopback",
+      severity: "critical",
+      title: "Lockdown profile requires loopback gateway bind",
+      detail: `tools.profile="lockdown" but gateway.bind="${bind}".`,
+      remediation:
+        'Set gateway.bind="loopback" (and keep remote access behind SSH/Tailscale serve).',
+    });
+  }
+
+  const tailscaleMode = cfg.gateway?.tailscale?.mode ?? "off";
+  if (tailscaleMode !== "off") {
+    findings.push({
+      checkId: "tools.profile_lockdown.tailscale_not_off",
+      severity: "critical",
+      title: "Lockdown profile requires Tailscale exposure to be off",
+      detail: `tools.profile="lockdown" but gateway.tailscale.mode="${tailscaleMode}".`,
+      remediation:
+        'Set gateway.tailscale.mode="off" for lockdown. Use explicit opt-out if you need remote exposure.',
+    });
+  }
+
+  const denySet = normalizeToolListForAudit(cfg.tools?.deny);
+  const missingDeny = LOCKDOWN_REQUIRED_DENY.filter((toolName) => !denySet.has(toolName));
+  if (missingDeny.length > 0) {
+    findings.push({
+      checkId: "tools.profile_lockdown.missing_deny_entries",
+      severity: "critical",
+      title: "Lockdown profile is missing required tools.deny entries",
+      detail: `tools.profile="lockdown" requires tools.deny to include: ${LOCKDOWN_REQUIRED_DENY.join(", ")}. Missing: ${missingDeny.join(", ")}.`,
+      remediation: `Add the missing entries under tools.deny (or re-run onboarding with lockdown mode).`,
+    });
+  }
+
+  const sandboxMode = cfg.agents?.defaults?.sandbox?.mode ?? "off";
+  if (sandboxMode !== "all") {
+    findings.push({
+      checkId: "tools.profile_lockdown.sandbox_not_all",
+      severity: "critical",
+      title: 'Lockdown profile requires agents.defaults.sandbox.mode="all"',
+      detail: `tools.profile="lockdown" but agents.defaults.sandbox.mode="${sandboxMode}".`,
+      remediation: 'Set agents.defaults.sandbox.mode="all" for lockdown.',
+    });
+  }
+
+  const nonPairingDmPolicies = collectNonPairingDmPolicies(cfg);
+  if (nonPairingDmPolicies.length > 0) {
+    findings.push({
+      checkId: "tools.profile_lockdown.dm_policy_not_pairing",
+      severity: "warn",
+      title: "Lockdown profile expects paired DM policy",
+      detail: `tools.profile="lockdown" detected non-pairing dmPolicy values: ${nonPairingDmPolicies.join(", ")}.`,
+      remediation: 'Set channel dmPolicy to "pairing" (or "disabled") for lockdown deployments.',
+    });
+  }
 
   return findings;
 }

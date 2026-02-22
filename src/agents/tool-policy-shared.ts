@@ -1,4 +1,4 @@
-export type ToolProfileId = "minimal" | "coding" | "messaging" | "full";
+export type ToolProfileId = "minimal" | "coding" | "messaging" | "lockdown" | "full";
 
 type ToolProfilePolicy = {
   allow?: string[];
@@ -72,6 +72,28 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
       "sessions_history",
       "sessions_send",
       "session_status",
+    ],
+  },
+  lockdown: {
+    allow: [
+      "group:messaging",
+      "sessions_list",
+      "sessions_history",
+      "sessions_send",
+      "session_status",
+      "memory_search",
+      "memory_get",
+    ],
+    deny: [
+      "group:runtime",
+      "group:nodes",
+      "group:web",
+      "browser",
+      "canvas",
+      "cron",
+      "gateway",
+      "sessions_spawn",
+      "subagents",
     ],
   },
   full: {},

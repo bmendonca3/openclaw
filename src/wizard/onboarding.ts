@@ -333,7 +333,8 @@ export async function runOnboardingWizard(
 
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
-  const { applyOnboardingLocalWorkspaceConfig } = await import("../commands/onboard-config.js");
+  const { applyOnboardingLocalWorkspaceConfig, applyOnboardingLockdownConfig } =
+    await import("../commands/onboard-config.js");
   let nextConfig: OpenClawConfig = applyOnboardingLocalWorkspaceConfig(baseConfig, workspaceDir);
 
   const { ensureAuthProfileStore } = await import("../agents/auth-profiles.js");
@@ -408,6 +409,19 @@ export async function runOnboardingWizard(
   });
   nextConfig = gateway.nextConfig;
   const settings = gateway.settings;
+
+  if (opts.lockdown) {
+    nextConfig = applyOnboardingLockdownConfig(nextConfig);
+    await prompter.note(
+      [
+        "Applied lockdown defaults:",
+        '- gateway.bind="loopback" and tailscale.mode="off"',
+        '- tools.profile="lockdown" with denylist for exec/nodes/browser',
+        '- agents.defaults.sandbox.mode="all"',
+      ].join("\n"),
+      "Lockdown",
+    );
+  }
 
   if (opts.skipChannels ?? opts.skipProviders) {
     await prompter.note("Skipping channel setup.", "Channels");

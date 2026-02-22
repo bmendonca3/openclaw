@@ -4,7 +4,10 @@ import { resolveGatewayPort, writeConfigFile } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import { DEFAULT_GATEWAY_DAEMON_RUNTIME } from "../daemon-runtime.js";
-import { applyOnboardingLocalWorkspaceConfig } from "../onboard-config.js";
+import {
+  applyOnboardingLocalWorkspaceConfig,
+  applyOnboardingLockdownConfig,
+} from "../onboard-config.js";
 import {
   applyWizardMetadata,
   DEFAULT_WORKSPACE,
@@ -74,6 +77,10 @@ export async function runNonInteractiveOnboardingLocal(params: {
     return;
   }
   nextConfig = gatewayResult.nextConfig;
+
+  if (opts.lockdown) {
+    nextConfig = applyOnboardingLockdownConfig(nextConfig);
+  }
 
   nextConfig = applyNonInteractiveSkillsConfig({ nextConfig, opts, runtime });
 
