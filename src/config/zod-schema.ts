@@ -714,4 +714,29 @@ export const OpenClawSchema = z
         }
       }
     }
+  })
+  .superRefine((cfg, ctx) => {
+    const defaultSandboxMode = cfg.agents?.defaults?.sandbox?.mode ?? "off";
+    if (cfg.tools?.exec?.host === "sandbox" && defaultSandboxMode === "off") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tools", "exec", "host"],
+        message:
+          'tools.exec.host="sandbox" requires sandbox mode ("non-main" or "all"); current effective mode is "off".',
+      });
+    }
+
+    const agents = cfg.agents?.list ?? [];
+    for (let idx = 0; idx < agents.length; idx += 1) {
+      const agent = agents[idx];
+      const agentSandboxMode = agent.sandbox?.mode ?? defaultSandboxMode;
+      if (agent.tools?.exec?.host === "sandbox" && agentSandboxMode === "off") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["agents", "list", idx, "tools", "exec", "host"],
+          message:
+            'agents.list[].tools.exec.host="sandbox" requires effective sandbox mode ("non-main" or "all"); current effective mode is "off".',
+        });
+      }
+    }
   });
