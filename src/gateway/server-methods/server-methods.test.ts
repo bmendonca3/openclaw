@@ -16,6 +16,12 @@ import { sanitizeChatSendMessageInput } from "./chat.js";
 import { createExecApprovalHandlers } from "./exec-approval.js";
 import { logsHandlers } from "./logs.js";
 
+const appendTamperAuditEventMock = vi.fn();
+
+vi.mock("../../security/tamper-audit-log.js", () => ({
+  appendTamperAuditEvent: (...args: unknown[]) => appendTamperAuditEventMock(...args),
+}));
+
 vi.mock("../../commands/status.js", () => ({
   getStatusSummary: vi.fn().mockResolvedValue({ ok: true }),
 }));
@@ -355,6 +361,8 @@ describe("exec approval handlers", () => {
   });
 
   it("broadcasts request + resolve", async () => {
+    appendTamperAuditEventMock.mockClear();
+    appendTamperAuditEventMock.mockResolvedValue(undefined);
     const { handlers, broadcasts, respond, context } = createExecApprovalFixture();
 
     const requestPromise = requestExecApproval({
@@ -392,6 +400,12 @@ describe("exec approval handlers", () => {
       undefined,
     );
     expect(broadcasts.some((entry) => entry.event === "exec.approval.resolved")).toBe(true);
+    expect(appendTamperAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "exec.approval.resolve",
+        payload: expect.objectContaining({ id, decision: "allow-once" }),
+      }),
+    );
   });
 
   it("accepts resolve during broadcast", async () => {

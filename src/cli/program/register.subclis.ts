@@ -252,6 +252,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "audit",
+    description: "Tamper-evident local audit log verification",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../audit-cli.js");
+      mod.registerAuditCli(program);
+    },
+  },
+  {
     name: "security",
     description: "Security tools and local config audits",
     hasSubcommands: true,

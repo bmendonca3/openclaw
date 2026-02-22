@@ -3,6 +3,7 @@ import {
   DEFAULT_EXEC_APPROVAL_TIMEOUT_MS,
   type ExecApprovalDecision,
 } from "../../infra/exec-approvals.js";
+import { appendTamperAuditEvent } from "../../security/tamper-audit-log.js";
 import type { ExecApprovalManager } from "../exec-approval-manager.js";
 import {
   ErrorCodes,
@@ -186,12 +187,31 @@ export function createExecApprovalHandlers(
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "invalid decision"));
         return;
       }
+      const snapshot = manager.getSnapshot(p.id);
+      if (!snapshot) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "unknown approval id"));
+        return;
+      }
       const resolvedBy = client?.connect?.client?.displayName ?? client?.connect?.client?.id;
       const ok = manager.resolve(p.id, decision, resolvedBy ?? null);
       if (!ok) {
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "unknown approval id"));
         return;
       }
+      void appendTamperAuditEvent({
+        type: "exec.approval.resolve",
+        payload: {
+          id: p.id,
+          decision,
+          resolvedBy: resolvedBy ?? null,
+          host: snapshot.request?.host ?? null,
+          security: snapshot.request?.security ?? null,
+          command: snapshot.request?.command ?? null,
+          sessionKey: snapshot.request?.sessionKey ?? null,
+        },
+      }).catch((err) => {
+        context.logGateway?.error?.(`exec approvals: audit log append failed: ${String(err)}`);
+      });
       context.broadcast(
         "exec.approval.resolved",
         { id: p.id, decision, resolvedBy, ts: Date.now() },
