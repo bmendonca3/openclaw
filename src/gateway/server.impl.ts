@@ -15,6 +15,8 @@ import {
   loadConfig,
   migrateLegacyConfig,
   readConfigFileSnapshot,
+  resolveConfigPath,
+  resolveStateDir,
   writeConfigFile,
 } from "../config/config.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
@@ -90,6 +92,7 @@ import {
 } from "./server/health-state.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { ensureGatewayStartupAuth } from "./startup-auth.js";
+import { assertGatewayStartupPermissionSafety } from "./startup-permissions.js";
 
 export { __resetModelCatalogCacheForTest } from "./server-model-catalog.js";
 
@@ -218,6 +221,13 @@ export async function startGatewayServer(
       `Invalid config at ${configSnapshot.path}.\n${issues}\nRun "${formatCliCommand("openclaw doctor")}" to repair, then retry.`,
     );
   }
+
+  const startupStateDir = resolveStateDir(process.env);
+  await assertGatewayStartupPermissionSafety({
+    env: process.env,
+    stateDir: startupStateDir,
+    configPath: configSnapshot.path ?? resolveConfigPath(process.env, startupStateDir),
+  });
 
   const autoEnable = applyPluginAutoEnable({ config: configSnapshot.config, env: process.env });
   if (autoEnable.changes.length > 0) {
