@@ -1114,11 +1114,8 @@ export function collectExposureMatrixFindings(cfg: OpenClawConfig): SecurityAudi
       isToolAllowedByPolicies(tool, policies),
     );
     const fsWorkspaceOnly = context.tools?.fs?.workspaceOnly ?? cfg.tools?.fs?.workspaceOnly;
-    const fsAllowOutsideWorkspace =
-      context.tools?.fs?.allowOutsideWorkspace ?? cfg.tools?.fs?.allowOutsideWorkspace;
     const runtimeUnguarded = runtimeTools.length > 0 && sandboxMode !== "all";
-    const fsUnguarded =
-      fsTools.length > 0 && sandboxMode !== "all" && fsAllowOutsideWorkspace === true;
+    const fsUnguarded = fsTools.length > 0 && sandboxMode !== "all" && fsWorkspaceOnly !== true;
     if (!runtimeUnguarded && !fsUnguarded) {
       continue;
     }
@@ -1128,7 +1125,7 @@ export function collectExposureMatrixFindings(cfg: OpenClawConfig): SecurityAudi
     riskyContexts.push(
       `${context.label} (sandbox=${sandboxMode}; runtime=[${runtimeTools.join(", ") || "off"}]; fs=[${fsTools.join(", ") || "off"}]; fs.workspaceOnly=${
         fsWorkspaceOnly === true ? "true" : "false"
-      }; fs.allowOutsideWorkspace=${fsAllowOutsideWorkspace === true ? "true" : "false"})`,
+      })`,
     );
   }
 
@@ -1142,7 +1139,7 @@ export function collectExposureMatrixFindings(cfg: OpenClawConfig): SecurityAudi
         `Risky tool exposure contexts:\n${riskyContexts.map((line) => `- ${line}`).join("\n")}\n` +
         "Prompt injection in open groups can trigger command/file actions in these contexts.",
       remediation:
-        'For open groups, prefer tools.profile="messaging" (or deny group:runtime/group:fs), keep tools.fs.allowOutsideWorkspace=false (default), set tools.fs.workspaceOnly=true when using sandbox mounts, and use agents.defaults.sandbox.mode="all" for exposed agents.',
+        'For open groups, prefer tools.profile="messaging" (or deny group:runtime/group:fs), set tools.fs.workspaceOnly=true, and use agents.defaults.sandbox.mode="all" for exposed agents.',
     });
   }
 

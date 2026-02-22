@@ -61,76 +61,38 @@ describe("workspace path resolution", () => {
     });
   });
 
-  it("blocks reading absolute paths outside workspace in host mode by default", async () => {
-    await withTempDir("openclaw-ws-", async (workspaceDir) => {
-      await withTempDir("openclaw-outside-", async (outsideDir) => {
-        const outsideFile = path.join(outsideDir, "secret.txt");
-        await fs.writeFile(outsideFile, "nope", "utf8");
-
-        const tools = createOpenClawCodingTools({ workspaceDir });
-        const readTool = tools.find((tool) => tool.name === "read");
-        expect(readTool).toBeDefined();
-
-        await expect(readTool?.execute("ws-outside-read", { path: outsideFile })).rejects.toThrow(
-          /Path escapes sandbox root/i,
-        );
-      });
-    });
-  });
-
-  it.runIf(process.platform !== "win32")(
-    "blocks reading /etc/passwd in host mode by default",
-    async () => {
-      await withTempDir("openclaw-ws-", async (workspaceDir) => {
-        const tools = createOpenClawCodingTools({ workspaceDir });
-        const readTool = tools.find((tool) => tool.name === "read");
-        expect(readTool).toBeDefined();
-
-        await expect(readTool?.execute("ws-etc-read", { path: "/etc/passwd" })).rejects.toThrow(
-          /Path escapes sandbox root/i,
-        );
-      });
-    },
-  );
-
-  it("blocks symlink escapes in host mode by default", async () => {
-    await withTempDir("openclaw-ws-", async (workspaceDir) => {
-      await withTempDir("openclaw-outside-", async (outsideDir) => {
-        const outsideFile = path.join(outsideDir, "secret.txt");
-        const linkPath = path.join(workspaceDir, "linked-secret.txt");
-        await fs.writeFile(outsideFile, "secret", "utf8");
-        try {
-          await fs.symlink(outsideFile, linkPath);
-        } catch {
-          return;
-        }
-
-        const tools = createOpenClawCodingTools({ workspaceDir });
-        const readTool = tools.find((tool) => tool.name === "read");
-        expect(readTool).toBeDefined();
-
-        await expect(readTool?.execute("ws-link-read", { path: linkPath })).rejects.toThrow(
-          /Symlink escapes sandbox root/i,
-        );
-      });
-    });
-  });
-
-  it("allows host-mode paths outside workspace only with fs.allowOutsideWorkspace=true", async () => {
+  it("allows reading absolute paths outside workspace in host mode by default", async () => {
     await withTempDir("openclaw-ws-", async (workspaceDir) => {
       await withTempDir("openclaw-outside-", async (outsideDir) => {
         const outsideFile = path.join(outsideDir, "secret.txt");
         await fs.writeFile(outsideFile, "allowed", "utf8");
 
+        const tools = createOpenClawCodingTools({ workspaceDir });
+        const readTool = tools.find((tool) => tool.name === "read");
+        expect(readTool).toBeDefined();
+
+        const result = await readTool?.execute("ws-outside-read", { path: outsideFile });
+        expect(getTextContent(result)).toContain("allowed");
+      });
+    });
+  });
+
+  it("blocks reading absolute paths outside workspace when tools.fs.workspaceOnly=true", async () => {
+    await withTempDir("openclaw-ws-", async (workspaceDir) => {
+      await withTempDir("openclaw-outside-", async (outsideDir) => {
+        const outsideFile = path.join(outsideDir, "secret.txt");
+        await fs.writeFile(outsideFile, "blocked", "utf8");
+
         const cfg = {
-          tools: { fs: { allowOutsideWorkspace: true } },
+          tools: { fs: { workspaceOnly: true } },
         } as unknown as OpenClawConfig;
         const tools = createOpenClawCodingTools({ workspaceDir, config: cfg });
         const readTool = tools.find((tool) => tool.name === "read");
         expect(readTool).toBeDefined();
 
-        const result = await readTool?.execute("ws-outside-read-allowed", { path: outsideFile });
-        expect(getTextContent(result)).toContain("allowed");
+        await expect(
+          readTool?.execute("ws-outside-read-blocked", { path: outsideFile }),
+        ).rejects.toThrow(/Path escapes sandbox root/i);
       });
     });
   });

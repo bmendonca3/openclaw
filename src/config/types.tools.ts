@@ -228,15 +228,9 @@ export type ExecToolConfig = {
 export type FsToolsConfig = {
   /**
    * Restrict filesystem tools (read/write/edit/apply_patch) to the agent workspace directory.
-   * In host mode (no sandbox), this guard is enabled by default unless allowOutsideWorkspace=true.
-   * In sandbox mode, default remains false to preserve legacy mounted-path behavior.
+   * Default: false (unrestricted, matches legacy behavior).
    */
   workspaceOnly?: boolean;
-  /**
-   * Escape hatch for host-mode sessions: allow filesystem tools outside workspace.
-   * Default: false (workspace-contained by default in host mode).
-   */
-  allowOutsideWorkspace?: boolean;
 };
 
 export type AgentToolsConfig = {

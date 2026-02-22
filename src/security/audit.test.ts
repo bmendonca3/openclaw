@@ -1019,9 +1019,6 @@ describe("security audit", () => {
         mappings: [{ allowUnsafeExternalContent: true }],
       },
       tools: {
-        fs: {
-          allowOutsideWorkspace: true,
-        },
         exec: {
           applyPatch: {
             workspaceOnly: false,
@@ -1038,7 +1035,6 @@ describe("security audit", () => {
     expect(finding?.detail).toContain("hooks.gmail.allowUnsafeExternalContent=true");
     expect(finding?.detail).toContain("hooks.mappings[0].allowUnsafeExternalContent=true");
     expect(finding?.detail).toContain("tools.exec.applyPatch.workspaceOnly=false");
-    expect(finding?.detail).toContain("tools.fs.allowOutsideWorkspace=true");
   });
 
   it("scores X-Real-IP fallback risk by gateway exposure", async () => {
@@ -2448,23 +2444,6 @@ description: test skill
         profile: "coding",
         deny: ["group:runtime"],
         fs: { workspaceOnly: true },
-      },
-    };
-
-    const res = await audit(cfg);
-
-    expect(
-      res.findings.some((f) => f.checkId === "security.exposure.open_groups_with_runtime_or_fs"),
-    ).toBe(false);
-  });
-
-  it("does not flag filesystem exposure for open groups when host-mode workspace guard stays enabled", async () => {
-    const cfg: OpenClawConfig = {
-      channels: { whatsapp: { groupPolicy: "open" } },
-      tools: {
-        elevated: { enabled: false },
-        profile: "coding",
-        deny: ["group:runtime"],
       },
     };
 
