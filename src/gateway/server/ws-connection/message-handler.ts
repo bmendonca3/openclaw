@@ -48,7 +48,7 @@ import {
   resolveClientIp,
 } from "../../net.js";
 import { resolveNodeCommandAllowlist } from "../../node-command-policy.js";
-import { checkBrowserOrigin } from "../../origin-check.js";
+import { checkBrowserOrigin, shouldCheckBrowserOrigin } from "../../origin-check.js";
 import { GATEWAY_CLIENT_IDS } from "../../protocol/client-info.js";
 import {
   type ConnectParams,
@@ -329,16 +329,21 @@ export function attachGatewayWsMessageHandler(params: {
         connectParams.scopes = scopes;
 
         const isControlUi = connectParams.client.id === GATEWAY_CLIENT_IDS.CONTROL_UI;
-        const isWebchat = isWebchatConnect(connectParams);
-        if (isControlUi || isWebchat) {
+        if (
+          shouldCheckBrowserOrigin({
+            requestOrigin,
+            clientMode: connectParams.client.mode,
+          })
+        ) {
           const originCheck = checkBrowserOrigin({
             requestHost,
             origin: requestOrigin,
             allowedOrigins: configSnapshot.gateway?.controlUi?.allowedOrigins,
           });
           if (!originCheck.ok) {
-            const errorMessage =
-              "origin not allowed (open the Control UI from the gateway host or allow it in gateway.controlUi.allowedOrigins)";
+            const errorMessage = isControlUi
+              ? "origin not allowed (open the Control UI from the gateway host or allow it in gateway.controlUi.allowedOrigins)"
+              : "origin not allowed";
             markHandshakeFailure("origin-mismatch", {
               origin: requestOrigin ?? "n/a",
               host: requestHost ?? "n/a",
