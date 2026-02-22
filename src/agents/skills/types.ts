@@ -1,4 +1,5 @@
 import type { Skill } from "@mariozechner/pi-coding-agent";
+import type { SkillSignatureStatus } from "./signature.js";
 
 export type SkillInstallSpec = {
   id?: string;
@@ -68,6 +69,7 @@ export type SkillEntry = {
   frontmatter: ParsedSkillFrontmatter;
   metadata?: OpenClawSkillMetadata;
   invocation?: SkillInvocationPolicy;
+  signature?: SkillSignatureStatus;
 };
 
 export type SkillEligibilityContext = {
