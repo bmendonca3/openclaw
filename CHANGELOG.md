@@ -9,6 +9,7 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Update/Core: add an optional built-in auto-updater for package installs (`update.auto.*`), default-off, with stable rollout delay+jitter and beta hourly cadence.
+- Gateway/Security: add a critical-approval gate for high-risk elevated exec allow decisions with optional Control UI origin enforcement and break-glass approval codes. (#23828) Thanks @bmendonca3.
 - CLI/Update: add `openclaw update --dry-run` to preview channel/tag/target/restart actions without mutating config, installing, syncing plugins, or restarting.
 - Skills: remove bundled `food-order` skill from this repo; manage/install it from ClawHub instead.
 - Docs/Subagents: make thread-bound session guidance channel-first instead of Discord-specific, and list thread-supporting channels explicitly. (#23589) Thanks @osolmaz.
