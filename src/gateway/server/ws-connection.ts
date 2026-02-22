@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { WebSocket, WebSocketServer } from "ws";
+import { loadConfig } from "../../config/config.js";
 import { resolveCanvasHostUrl } from "../../infra/canvas-host-url.js";
 import { removeRemoteNodeInfo } from "../../infra/skills-remote.js";
 import { upsertPresence } from "../../infra/system-presence.js";
@@ -8,8 +9,13 @@ import { truncateUtf16Safe } from "../../utils.js";
 import { isWebchatClient } from "../../utils/message-channel.js";
 import type { AuthRateLimiter } from "../auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "../auth.js";
-import { isLoopbackAddress } from "../net.js";
-import { getHandshakeTimeoutMs } from "../server-constants.js";
+import { isLoopbackAddress, resolveClientIp } from "../net.js";
+import {
+  getHandshakeTimeoutMs,
+  getWsConnectRateLimitMaxAttempts,
+  getWsConnectRateLimitWindowMs,
+  getWsMaxConnectionsPerIp,
+} from "../server-constants.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "../server-methods/types.js";
 import { formatError } from "../server-utils.js";
 import { logWs } from "../ws-log.js";
@@ -99,6 +105,17 @@ export function attachGatewayWsConnectionHandler(params: {
     broadcast,
     buildRequestContext,
   } = params;
+  const wsMaxConnectionsPerIp = getWsMaxConnectionsPerIp();
+  const wsConnectRateLimitMaxAttempts = getWsConnectRateLimitMaxAttempts();
+  const wsConnectRateLimitWindowMs = getWsConnectRateLimitWindowMs();
+  const activeConnectionsByIp = new Map<string, number>();
+  const connectAttemptsByIp = new Map<
+    string,
+    {
+      windowStartedAtMs: number;
+      attempts: number;
+    }
+  >();
 
   wss.on("connection", (socket, upgradeReq) => {
     let client: GatewayWsClient | null = null;
@@ -114,6 +131,61 @@ export function attachGatewayWsConnectionHandler(params: {
     const requestUserAgent = headerValue(upgradeReq.headers["user-agent"]);
     const forwardedFor = headerValue(upgradeReq.headers["x-forwarded-for"]);
     const realIp = headerValue(upgradeReq.headers["x-real-ip"]);
+    const configSnapshot = loadConfig();
+    const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
+    const allowRealIpFallback = configSnapshot.gateway?.allowRealIpFallback === true;
+    const resolvedClientIp = resolveClientIp({
+      remoteAddr,
+      forwardedFor,
+      realIp,
+      trustedProxies,
+      allowRealIpFallback,
+    });
+    const connectionLimitKey = (resolvedClientIp ?? remoteAddr)?.trim();
+    let ipConnectionSlotHeld = false;
+
+    if (connectionLimitKey) {
+      const now = Date.now();
+      const previousRate = connectAttemptsByIp.get(connectionLimitKey);
+      const activeWindow =
+        previousRate && now - previousRate.windowStartedAtMs < wsConnectRateLimitWindowMs;
+      const nextRate = activeWindow
+        ? {
+            windowStartedAtMs: previousRate.windowStartedAtMs,
+            attempts: previousRate.attempts + 1,
+          }
+        : {
+            windowStartedAtMs: now,
+            attempts: 1,
+          };
+      connectAttemptsByIp.set(connectionLimitKey, nextRate);
+      if (nextRate.attempts > wsConnectRateLimitMaxAttempts) {
+        logWsControl.warn(
+          `ws connect rate limit exceeded ip=${connectionLimitKey} attempts=${nextRate.attempts} windowMs=${wsConnectRateLimitWindowMs}`,
+        );
+        try {
+          socket.close(1008, "ws connect rate limit exceeded");
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+
+      const activeConnections = activeConnectionsByIp.get(connectionLimitKey) ?? 0;
+      if (activeConnections >= wsMaxConnectionsPerIp) {
+        logWsControl.warn(
+          `ws concurrent connection limit exceeded ip=${connectionLimitKey} active=${activeConnections} limit=${wsMaxConnectionsPerIp}`,
+        );
+        try {
+          socket.close(1008, "too many concurrent ws connections for ip");
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      activeConnectionsByIp.set(connectionLimitKey, activeConnections + 1);
+      ipConnectionSlotHeld = true;
+    }
 
     const canvasHostPortForWs = canvasHostServerPort ?? (canvasHostEnabled ? port : undefined);
     const canvasHostOverride =
@@ -171,6 +243,15 @@ export function attachGatewayWsConnectionHandler(params: {
         return;
       }
       closed = true;
+      if (ipConnectionSlotHeld && connectionLimitKey) {
+        const remaining = (activeConnectionsByIp.get(connectionLimitKey) ?? 1) - 1;
+        if (remaining > 0) {
+          activeConnectionsByIp.set(connectionLimitKey, remaining);
+        } else {
+          activeConnectionsByIp.delete(connectionLimitKey);
+        }
+        ipConnectionSlotHeld = false;
+      }
       clearTimeout(handshakeTimer);
       if (client) {
         clients.delete(client);

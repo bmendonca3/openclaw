@@ -57,7 +57,12 @@ import {
   validateRequestFrame,
 } from "../../protocol/index.js";
 import { parseGatewayRole } from "../../role-policy.js";
-import { MAX_BUFFERED_BYTES, MAX_PAYLOAD_BYTES, TICK_INTERVAL_MS } from "../../server-constants.js";
+import {
+  getWsMaxPayloadBytes,
+  getWsMaxQueuedMessagesPerConnection,
+  MAX_BUFFERED_BYTES,
+  TICK_INTERVAL_MS,
+} from "../../server-constants.js";
 import { handleGatewayRequest } from "../../server-methods.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "../../server-methods/types.js";
 import { formatError } from "../../server-utils.js";
@@ -149,6 +154,9 @@ export function attachGatewayWsMessageHandler(params: {
   const configSnapshot = loadConfig();
   const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
   const allowRealIpFallback = configSnapshot.gateway?.allowRealIpFallback === true;
+  const wsMaxPayloadBytes = getWsMaxPayloadBytes();
+  const wsMaxQueuedMessagesPerConnection = getWsMaxQueuedMessagesPerConnection();
+  let inFlightRequestCount = 0;
   const clientIp = resolveClientIp({
     remoteAddr,
     forwardedFor,
@@ -838,7 +846,7 @@ export function attachGatewayWsMessageHandler(params: {
               }
             : undefined,
           policy: {
-            maxPayload: MAX_PAYLOAD_BYTES,
+            maxPayload: wsMaxPayloadBytes,
             maxBufferedBytes: MAX_BUFFERED_BYTES,
             tickIntervalMs: TICK_INTERVAL_MS,
           },
@@ -954,6 +962,32 @@ export function attachGatewayWsMessageHandler(params: {
         });
       };
 
+      if (inFlightRequestCount >= wsMaxQueuedMessagesPerConnection) {
+        setCloseCause("ws-queued-messages-limit", {
+          inFlightRequestCount,
+          maxQueuedMessagesPerConnection: wsMaxQueuedMessagesPerConnection,
+          method: req.method,
+        });
+        logWsControl.warn(
+          `ws queued request limit exceeded conn=${connId} method=${req.method} inFlight=${inFlightRequestCount} limit=${wsMaxQueuedMessagesPerConnection}`,
+        );
+        respond(
+          false,
+          undefined,
+          errorShape(
+            ErrorCodes.UNAVAILABLE,
+            "too many queued websocket requests; retry after current requests complete",
+          ),
+          {
+            inFlightRequestCount,
+            maxQueuedMessagesPerConnection: wsMaxQueuedMessagesPerConnection,
+          },
+        );
+        close(1008, "too many queued ws messages");
+        return;
+      }
+
+      inFlightRequestCount += 1;
       void (async () => {
         await handleGatewayRequest({
           req,
@@ -963,10 +997,14 @@ export function attachGatewayWsMessageHandler(params: {
           extraHandlers,
           context: buildRequestContext(),
         });
-      })().catch((err) => {
-        logGateway.error(`request handler failed: ${formatForLog(err)}`);
-        respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)));
-      });
+      })()
+        .catch((err) => {
+          logGateway.error(`request handler failed: ${formatForLog(err)}`);
+          respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)));
+        })
+        .finally(() => {
+          inFlightRequestCount = Math.max(0, inFlightRequestCount - 1);
+        });
     } catch (err) {
       logGateway.error(`parse/handle error: ${String(err)}`);
       logWs("out", "parse-error", { connId, error: formatForLog(err) });
