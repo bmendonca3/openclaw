@@ -18,7 +18,7 @@ import {
   resolveOpenClawMetadata,
   resolveSkillInvocationPolicy,
 } from "./frontmatter.js";
-import { resolveWorkspaceSkillIntegrity } from "./integrity.js";
+import { resolveManagedSkillIntegrity } from "./integrity.js";
 import { resolvePluginSkillDirs } from "./plugin-skills.js";
 import { serializeByKey } from "./serialize.js";
 import type {
@@ -366,10 +366,16 @@ function loadSkillEntries(
     dir: workspaceSkillsDir,
     source: "openclaw-workspace",
   });
-  const workspaceSkillIntegrity = resolveWorkspaceSkillIntegrity({
-    workspaceDir,
-    skills: workspaceSkills,
-  });
+  const allowUnlocked = opts?.config?.skills?.allowUnlocked === true;
+  const defaultManagedDir = path.resolve(path.join(CONFIG_DIR, "skills"));
+  const enforceManagedLock = path.resolve(managedSkillsDir) === defaultManagedDir;
+  const managedSkillIntegrity = enforceManagedLock
+    ? resolveManagedSkillIntegrity({
+        managedSkillsDir,
+        skills: managedSkills,
+        allowUnlocked,
+      })
+    : new Map();
 
   const merged = new Map<string, Skill>();
   // Precedence: extra < bundled < managed < agents-skills-personal < agents-skills-project < workspace
@@ -406,7 +412,7 @@ function loadSkillEntries(
       metadata: resolveOpenClawMetadata(frontmatter),
       invocation: resolveSkillInvocationPolicy(frontmatter),
       integrity:
-        skill.source === "openclaw-workspace" ? workspaceSkillIntegrity.get(skill.name) : undefined,
+        skill.source === "openclaw-managed" ? managedSkillIntegrity.get(skill.name) : undefined,
     };
   });
   return skillEntries;

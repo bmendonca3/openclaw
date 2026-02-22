@@ -21,6 +21,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Optional allowlist of skills for this agent (omit = all skills; empty = no skills).",
   "agents.list[].skills":
     "Optional allowlist of skills for this agent (omit = all skills; empty = no skills).",
+  "skills.allowUnlocked":
+    "Allow loading managed skills missing skills.lock entries or with hash drift (default: false for default managed installs).",
   "agents.list[].identity.avatar":
     "Avatar image path (relative to the agent workspace only) or a remote URL/data URL.",
   "agents.defaults.heartbeat.suppressToolErrorWarnings":

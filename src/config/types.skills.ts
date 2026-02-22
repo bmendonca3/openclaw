@@ -38,6 +38,8 @@ export type SkillsLimitsConfig = {
 export type SkillsConfig = {
   /** Optional bundled-skill allowlist (only affects bundled skills). */
   allowBundled?: string[];
+  /** Allow loading skills that are missing a skills.lock entry or have drifted hashes. */
+  allowUnlocked?: boolean;
   load?: SkillsLoadConfig;
   install?: SkillsInstallConfig;
   limits?: SkillsLimitsConfig;

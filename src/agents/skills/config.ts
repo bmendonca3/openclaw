@@ -76,11 +76,15 @@ export function shouldIncludeSkill(params: {
   const skillKey = resolveSkillKey(entry.skill, entry);
   const skillConfig = resolveSkillConfig(config, skillKey);
   const allowBundled = normalizeAllowlist(config?.skills?.allowBundled);
+  const allowUnlocked = config?.skills?.allowUnlocked === true;
 
   if (skillConfig?.enabled === false) {
     return false;
   }
-  if (entry.integrity?.mismatch) {
+  if (entry.integrity?.missingLock && !allowUnlocked) {
+    return false;
+  }
+  if (entry.integrity?.mismatch && !allowUnlocked) {
     const approvedFingerprintRaw = skillConfig?.config?.integrityFingerprint;
     const approvedFingerprint =
       typeof approvedFingerprintRaw === "string" ? approvedFingerprintRaw.trim() : "";

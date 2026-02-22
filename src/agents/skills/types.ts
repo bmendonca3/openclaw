@@ -71,6 +71,7 @@ export type SkillEntry = {
   integrity?: {
     fingerprint: string;
     mismatch: boolean;
+    missingLock?: boolean;
   };
 };
 

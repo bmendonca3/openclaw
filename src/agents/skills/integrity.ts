@@ -5,7 +5,7 @@ import type { Skill } from "@mariozechner/pi-coding-agent";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 
 const skillsLogger = createSubsystemLogger("skills");
-const INTEGRITY_LOCK_REL_PATH = path.join(".clawhub", "openclaw-integrity.json");
+const INTEGRITY_LOCK_FILENAME = "skills.lock";
 const INTEGRITY_LOCK_VERSION = 1;
 const IGNORED_DIR_NAMES = new Set([".git", "node_modules", ".clawhub", ".clawdhub", "dist"]);
 
@@ -104,16 +104,20 @@ export function computeSkillFingerprint(skillDir: string): string {
   return hash.digest("hex");
 }
 
-export function resolveWorkspaceSkillIntegrity(params: {
-  workspaceDir: string;
+export function resolveManagedSkillIntegrity(params: {
+  managedSkillsDir: string;
   skills: Skill[];
-}): Map<string, { fingerprint: string; mismatch: boolean }> {
-  const result = new Map<string, { fingerprint: string; mismatch: boolean }>();
+  allowUnlocked: boolean;
+}): Map<string, { fingerprint: string; mismatch: boolean; missingLock: boolean }> {
+  const result = new Map<
+    string,
+    { fingerprint: string; mismatch: boolean; missingLock: boolean }
+  >();
   if (params.skills.length === 0) {
     return result;
   }
 
-  const lockPath = path.join(params.workspaceDir, INTEGRITY_LOCK_REL_PATH);
+  const lockPath = path.join(params.managedSkillsDir, INTEGRITY_LOCK_FILENAME);
   const lock = readSkillIntegrityLock(lockPath);
   let didUpdateLock = false;
 
@@ -127,10 +131,11 @@ export function resolveWorkspaceSkillIntegrity(params: {
       continue;
     }
     const previous = lock.skills[skill.name];
+    const missingLock = !previous?.fingerprint;
     const mismatch = Boolean(previous?.fingerprint) && previous.fingerprint !== fingerprint;
-    result.set(skill.name, { fingerprint, mismatch });
+    result.set(skill.name, { fingerprint, mismatch, missingLock });
 
-    if (!previous?.fingerprint) {
+    if (missingLock && params.allowUnlocked) {
       lock.skills[skill.name] = { fingerprint };
       didUpdateLock = true;
     }

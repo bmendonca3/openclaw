@@ -598,6 +598,7 @@ export const OpenClawSchema = z
     skills: z
       .object({
         allowBundled: z.array(z.string()).optional(),
+        allowUnlocked: z.boolean().optional(),
         load: z
           .object({
             extraDirs: z.array(z.string()).optional(),
