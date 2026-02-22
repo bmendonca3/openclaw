@@ -178,13 +178,13 @@ describe("sandbox browser binds config", () => {
     expect(resolved.binds).toBeUndefined();
   });
 
-  it("defaults browser network to dedicated sandbox network", () => {
+  it("defaults browser network to none", () => {
     const resolved = resolveSandboxBrowserConfig({
       scope: "agent",
       globalBrowser: {},
       agentBrowser: {},
     });
-    expect(resolved.network).toBe("openclaw-sandbox-browser");
+    expect(resolved.network).toBe("none");
   });
 
   it("prefers agent browser network over global browser network", () => {
@@ -218,5 +218,36 @@ describe("sandbox browser binds config", () => {
       },
     });
     expect(res.ok).toBe(false);
+  });
+
+  it("rejects bridge browser network without cdpSourceRange", () => {
+    const res = validateConfigObject({
+      agents: {
+        defaults: {
+          sandbox: {
+            browser: {
+              network: "bridge",
+            },
+          },
+        },
+      },
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("accepts bridge browser network with cdpSourceRange", () => {
+    const res = validateConfigObject({
+      agents: {
+        defaults: {
+          sandbox: {
+            browser: {
+              network: "bridge",
+              cdpSourceRange: "172.21.0.1/32",
+            },
+          },
+        },
+      },
+    });
+    expect(res.ok).toBe(true);
   });
 });

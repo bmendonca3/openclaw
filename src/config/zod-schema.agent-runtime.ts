@@ -198,12 +198,21 @@ export const SandboxBrowserSchema = z
     binds: z.array(z.string()).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.network?.trim().toLowerCase() === "host") {
+    const network = data.network?.trim().toLowerCase();
+    if (network === "host") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["network"],
         message:
           'Sandbox security: browser network mode "host" is blocked. Use "bridge" or a custom bridge network instead.',
+      });
+    }
+    if (network === "bridge" && !data.cdpSourceRange?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cdpSourceRange"],
+        message:
+          'Sandbox security: browser network mode "bridge" requires sandbox.browser.cdpSourceRange (for example 172.21.0.1/32).',
       });
     }
   })
