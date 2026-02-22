@@ -46,6 +46,15 @@ function normalizeAllowlist(input: unknown): string[] | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizePublisherAllowlist(input: unknown): string[] | undefined {
+  const normalized = normalizeAllowlist(input);
+  if (!normalized) {
+    return undefined;
+  }
+  const lowered = normalized.map((entry) => entry.toLowerCase());
+  return lowered.length > 0 ? lowered : undefined;
+}
+
 const BUNDLED_SOURCES = new Set(["openclaw-bundled"]);
 
 function isBundledSkill(entry: SkillEntry): boolean {
@@ -76,12 +85,28 @@ export function shouldIncludeSkill(params: {
   const skillKey = resolveSkillKey(entry.skill, entry);
   const skillConfig = resolveSkillConfig(config, skillKey);
   const allowBundled = normalizeAllowlist(config?.skills?.allowBundled);
+  const trustedPublishers = normalizePublisherAllowlist(config?.skills?.trustedPublishers);
 
   if (skillConfig?.enabled === false) {
     return false;
   }
   if (entry.signature?.status === "invalid") {
     return false;
+  }
+  if (trustedPublishers && trustedPublishers.length > 0) {
+    if (entry.signature?.status !== "verified") {
+      return false;
+    }
+    const publisherCandidates = [
+      entry.signature.publisher?.trim().toLowerCase(),
+      entry.signature.keyId?.trim().toLowerCase(),
+    ].filter((value): value is string => Boolean(value));
+    if (publisherCandidates.length === 0) {
+      return false;
+    }
+    if (!publisherCandidates.some((candidate) => trustedPublishers.includes(candidate))) {
+      return false;
+    }
   }
   if (!isBundledSkillAllowed(entry, allowBundled)) {
     return false;

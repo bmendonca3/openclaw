@@ -38,6 +38,8 @@ export type SkillsLimitsConfig = {
 export type SkillsConfig = {
   /** Optional bundled-skill allowlist (only affects bundled skills). */
   allowBundled?: string[];
+  /** Allowed skill publishers/key IDs for verified-skill policy. */
+  trustedPublishers?: string[];
   load?: SkillsLoadConfig;
   install?: SkillsInstallConfig;
   limits?: SkillsLimitsConfig;
