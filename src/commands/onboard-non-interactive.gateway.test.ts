@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { GatewayAuthConfig } from "../config/config.js";
 import { makeTempWorkspace } from "../test-helpers/workspace.js";
 import { captureEnv } from "../test-utils/env.js";
 import { createThrowingRuntime, readJsonFile } from "./onboard-non-interactive.test-helpers.js";
@@ -60,6 +61,19 @@ function getPseudoPort(base: number): number {
 
 const runtime = createThrowingRuntime();
 
+async function expectGatewayTokenAuth(params: {
+  authConfig: GatewayAuthConfig | null | undefined;
+  token: string;
+  env: NodeJS.ProcessEnv;
+}) {
+  const { authorizeGatewayConnect, resolveGatewayAuth } = await import("../gateway/auth.js");
+  const auth = resolveGatewayAuth({ authConfig: params.authConfig, env: params.env });
+  const resNoToken = await authorizeGatewayConnect({ auth, connectAuth: { token: undefined } });
+  expect(resNoToken.ok).toBe(false);
+  const resToken = await authorizeGatewayConnect({ auth, connectAuth: { token: params.token } });
+  expect(resToken.ok).toBe(true);
+}
+
 describe("onboard (non-interactive): gateway and remote auth", () => {
   let envSnapshot: ReturnType<typeof captureEnv>;
   let tempHome: string | undefined;
@@ -116,7 +130,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     envSnapshot.restore();
   });
 
-  it("writes gateway token auth into config", async () => {
+  it("writes gateway token env reference into config and gateway enforces it", async () => {
     await withStateDir("state-noninteractive-", async (stateDir) => {
       const token = "tok_test_123";
       const workspace = path.join(stateDir, "openclaw");
@@ -139,13 +153,24 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
 
       const configPath = resolveStateConfigPath(process.env, stateDir);
       const cfg = await readJsonFile<{
-        gateway?: { auth?: { mode?: string; token?: string } };
+        gateway?: { auth?: GatewayAuthConfig };
         agents?: { defaults?: { workspace?: string } };
       }>(configPath);
 
       expect(cfg?.agents?.defaults?.workspace).toBe(workspace);
       expect(cfg?.gateway?.auth?.mode).toBe("token");
-      expect(cfg?.gateway?.auth?.token).toBe(token);
+      expect(cfg?.gateway?.auth?.token).toBe("${OPENCLAW_GATEWAY_TOKEN}");
+      const dotenvRaw = await fs.readFile(path.join(stateDir, ".env"), "utf8");
+      expect(dotenvRaw).toContain(`OPENCLAW_GATEWAY_TOKEN=${token}`);
+
+      const { loadConfig } = await import("../config/config.js");
+      const resolved = loadConfig();
+
+      await expectGatewayTokenAuth({
+        authConfig: resolved.gateway?.auth,
+        token,
+        env: process.env,
+      });
     });
   }, 60_000);
 
@@ -182,7 +207,7 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     });
   }, 60_000);
 
-  it("auto-generates token auth when binding LAN and persists the token", async () => {
+  it("auto-generates token auth when binding LAN and persists token in dotenv", async () => {
     if (process.platform === "win32") {
       // Windows runner occasionally drops the temp config write in this flow; skip to keep CI green.
       return;
@@ -214,14 +239,26 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
         gateway?: {
           bind?: string;
           port?: number;
-          auth?: { mode?: string; token?: string };
+          auth?: GatewayAuthConfig;
         };
       }>(configPath);
 
       expect(cfg.gateway?.bind).toBe("lan");
       expect(cfg.gateway?.port).toBe(port);
       expect(cfg.gateway?.auth?.mode).toBe("token");
-      expect((cfg.gateway?.auth?.token ?? "").length).toBeGreaterThan(8);
+      expect(cfg.gateway?.auth?.token).toBe("${OPENCLAW_GATEWAY_TOKEN}");
+      const dotenvRaw = await fs.readFile(path.join(stateDir, ".env"), "utf8");
+      const match = dotenvRaw.match(/OPENCLAW_GATEWAY_TOKEN=(.+)/);
+      const token = match?.[1]?.trim().replace(/^"|"$/g, "") ?? "";
+      expect(token.length).toBeGreaterThan(8);
+
+      const { loadConfig } = await import("../config/config.js");
+      const resolved = loadConfig();
+      await expectGatewayTokenAuth({
+        authConfig: resolved.gateway?.auth,
+        token,
+        env: process.env,
+      });
     });
   }, 60_000);
 });
