@@ -335,6 +335,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "agents.list[].identity.avatar": "Agent Avatar",
   "discovery.mdns.mode": "mDNS Discovery Mode",
   "plugins.enabled": "Enable Plugins",
+  "plugins.requireInstallIntegrity": "Require Plugin Install Integrity",
   "plugins.allow": "Plugin Allowlist",
   "plugins.deny": "Plugin Denylist",
   "plugins.load.paths": "Plugin Load Paths",

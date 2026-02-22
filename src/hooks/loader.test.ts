@@ -281,5 +281,95 @@ describe("loader", () => {
       expect(count).toBe(0);
       expect(getRegisteredEventKeys()).not.toContain("command:new");
     });
+
+    it("fails closed for managed hooks with strict integrity mode when integrity is missing", async () => {
+      const managedHooksDir = path.join(tmpDir, "managed-hooks");
+      const hookDir = path.join(managedHooksDir, "strict-hook");
+      await fs.mkdir(hookDir, { recursive: true });
+      await fs.writeFile(
+        path.join(hookDir, "HOOK.md"),
+        [
+          "---",
+          "name: strict-hook",
+          'metadata: {"openclaw":{"events":["command:new"]}}',
+          "---",
+          "",
+          "# Strict Hook",
+        ].join("\n"),
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(hookDir, "handler.js"),
+        "export default async function() {}",
+        "utf-8",
+      );
+
+      const cfg: OpenClawConfig = {
+        hooks: {
+          internal: {
+            enabled: true,
+            requireInstallIntegrity: true,
+            installs: {
+              "strict-hook": {
+                source: "npm",
+                resolvedVersion: "1.0.0",
+              },
+            },
+          },
+        },
+      };
+
+      const count = await loadInternalHooks(cfg, tmpDir, { managedHooksDir });
+      expect(count).toBe(0);
+      expect(getRegisteredEventKeys()).not.toContain("command:new");
+    });
+
+    it("loads managed hooks with strict integrity mode when install metadata matches", async () => {
+      const managedHooksDir = path.join(tmpDir, "managed-hooks");
+      const hookDir = path.join(managedHooksDir, "strict-hook-ok");
+      await fs.mkdir(hookDir, { recursive: true });
+      await fs.writeFile(
+        path.join(hookDir, "HOOK.md"),
+        [
+          "---",
+          "name: strict-hook-ok",
+          'metadata: {"openclaw":{"events":["command:new"]}}',
+          "---",
+          "",
+          "# Strict Hook OK",
+        ].join("\n"),
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(hookDir, "handler.js"),
+        "export default async function() {}",
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(hookDir, "package.json"),
+        JSON.stringify({ name: "@openclaw/strict-hook-ok", version: "1.2.3" }, null, 2),
+        "utf-8",
+      );
+
+      const cfg: OpenClawConfig = {
+        hooks: {
+          internal: {
+            enabled: true,
+            requireInstallIntegrity: true,
+            installs: {
+              "strict-hook-ok": {
+                source: "npm",
+                integrity: "sha512-ok",
+                resolvedVersion: "1.2.3",
+              },
+            },
+          },
+        },
+      };
+
+      const count = await loadInternalHooks(cfg, tmpDir, { managedHooksDir });
+      expect(count).toBe(1);
+      expect(getRegisteredEventKeys()).toContain("command:new");
+    });
   });
 });

@@ -4,6 +4,7 @@ import { defaultSlotIdForKey } from "./slots.js";
 
 export type NormalizedPluginsConfig = {
   enabled: boolean;
+  requireInstallIntegrity: boolean;
   allow: string[];
   deny: string[];
   loadPaths: string[];
@@ -68,6 +69,7 @@ export const normalizePluginsConfig = (
   const memorySlot = normalizeSlotValue(config?.slots?.memory);
   return {
     enabled: config?.enabled !== false,
+    requireInstallIntegrity: config?.requireInstallIntegrity === true,
     allow: normalizeList(config?.allow),
     deny: normalizeList(config?.deny),
     loadPaths: normalizeList(config?.load?.paths),

@@ -106,6 +106,11 @@ export type HookInstallRecord = {
 export type InternalHooksConfig = {
   /** Enable hooks system */
   enabled?: boolean;
+  /**
+   * Fail closed for managed hooks unless install metadata includes integrity
+   * (and version, when available).
+   */
+  requireInstallIntegrity?: boolean;
   /** Legacy: List of internal hook handlers to register (still supported) */
   handlers?: InternalHookHandlerConfig[];
   /** Per-hook configuration overrides */

@@ -105,6 +105,7 @@ const HookInstallRecordSchema = z
 export const InternalHooksSchema = z
   .object({
     enabled: z.boolean().optional(),
+    requireInstallIntegrity: z.boolean().optional(),
     handlers: z.array(InternalHookHandlerSchema).optional(),
     entries: z.record(z.string(), HookConfigSchema).optional(),
     load: z

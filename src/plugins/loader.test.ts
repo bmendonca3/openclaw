@@ -597,4 +597,134 @@ describe("loadOpenClawPlugins", () => {
     expect(record?.status).not.toBe("loaded");
     expect(registry.diagnostics.some((entry) => entry.message.includes("escapes"))).toBe(true);
   });
+
+  it("fails closed for non-bundled plugins without install records when requireInstallIntegrity is enabled", () => {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
+    const plugin = writePlugin({
+      id: "strict-untracked",
+      body: `export default { id: "strict-untracked", register() {} };`,
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          requireInstallIntegrity: true,
+          load: { paths: [plugin.file] },
+          allow: ["strict-untracked"],
+          entries: { "strict-untracked": { enabled: true } },
+        },
+      },
+    });
+
+    const record = registry.plugins.find((entry) => entry.id === "strict-untracked");
+    expect(record?.status).toBe("error");
+    expect(record?.error).toContain("no install record");
+  });
+
+  it("fails closed when strict plugin install records are missing integrity", () => {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
+    const plugin = writePlugin({
+      id: "strict-missing-integrity",
+      body: `export default { id: "strict-missing-integrity", register() {} };`,
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          requireInstallIntegrity: true,
+          load: { paths: [plugin.file] },
+          allow: ["strict-missing-integrity"],
+          entries: { "strict-missing-integrity": { enabled: true } },
+          installs: {
+            "strict-missing-integrity": {
+              source: "npm",
+              resolvedVersion: "1.0.0",
+            },
+          },
+        },
+      },
+    });
+
+    const record = registry.plugins.find((entry) => entry.id === "strict-missing-integrity");
+    expect(record?.status).toBe("error");
+    expect(record?.error).toContain("no integrity hash");
+  });
+
+  it("fails closed when strict plugin install versions drift", () => {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
+    const pluginDir = makeTempDir();
+    fs.writeFileSync(
+      path.join(pluginDir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@openclaw/strict-version-drift",
+          version: "1.2.3",
+          openclaw: { extensions: ["./index.js"] },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    const plugin = writePlugin({
+      id: "strict-version-drift",
+      body: `export default { id: "strict-version-drift", register() {} };`,
+      dir: pluginDir,
+      filename: "index.js",
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          requireInstallIntegrity: true,
+          load: { paths: [plugin.file] },
+          allow: ["strict-version-drift"],
+          entries: { "strict-version-drift": { enabled: true } },
+          installs: {
+            "strict-version-drift": {
+              source: "npm",
+              integrity: "sha512-abc",
+              resolvedVersion: "9.9.9",
+            },
+          },
+        },
+      },
+    });
+
+    const record = registry.plugins.find((entry) => entry.id === "strict-version-drift");
+    expect(record?.status).toBe("error");
+    expect(record?.error).toContain("version drifted");
+  });
+
+  it("loads strict plugin installs when integrity metadata is present", () => {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
+    const plugin = writePlugin({
+      id: "strict-ok",
+      body: `export default { id: "strict-ok", register() {} };`,
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          requireInstallIntegrity: true,
+          load: { paths: [plugin.file] },
+          allow: ["strict-ok"],
+          entries: { "strict-ok": { enabled: true } },
+          installs: {
+            "strict-ok": {
+              source: "npm",
+              integrity: "sha512-ok",
+            },
+          },
+        },
+      },
+    });
+
+    const record = registry.plugins.find((entry) => entry.id === "strict-ok");
+    expect(record?.status).toBe("loaded");
+  });
 });

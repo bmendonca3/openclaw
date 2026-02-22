@@ -31,6 +31,11 @@ export type PluginInstallRecord = {
 export type PluginsConfig = {
   /** Enable or disable plugin loading. */
   enabled?: boolean;
+  /**
+   * Fail closed for non-bundled plugins unless install metadata includes
+   * integrity (and version, when available).
+   */
+  requireInstallIntegrity?: boolean;
   /** Optional plugin allowlist (plugin ids). */
   allow?: string[];
   /** Optional plugin denylist (plugin ids). */

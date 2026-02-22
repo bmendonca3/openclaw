@@ -294,6 +294,8 @@ export const FIELD_HELP: Record<string, string> = {
   "agents.defaults.memorySearch.sync.sessions.deltaMessages":
     "Minimum appended JSONL lines before session transcripts trigger reindex (default: 50).",
   "plugins.enabled": "Enable plugin/extension loading (default: true).",
+  "plugins.requireInstallIntegrity":
+    "Fail closed for non-bundled plugins unless install records include integrity hashes (and matching versions when available).",
   "plugins.allow": "Optional allowlist of plugin ids; when set, only listed plugins load.",
   "plugins.deny": "Optional denylist of plugin ids; deny wins over allowlist.",
   "plugins.load.paths": "Additional plugin files or directories to load.",

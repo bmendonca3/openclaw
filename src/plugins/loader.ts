@@ -275,6 +275,57 @@ function isTrackedByProvenance(params: {
   return matchesPathMatcher(params.index.loadPathMatcher, sourcePath);
 }
 
+function resolveInstallIntegrityFailure(params: {
+  config: OpenClawConfig;
+  pluginId: string;
+  pluginVersion?: string;
+  pluginSource: string;
+  origin: PluginRecord["origin"];
+}): string | null {
+  if (params.origin === "bundled") {
+    return null;
+  }
+
+  const installRecord = params.config.plugins?.installs?.[params.pluginId];
+  if (!installRecord) {
+    return `plugins.requireInstallIntegrity is enabled, but "${params.pluginId}" has no install record.`;
+  }
+  const integrity =
+    typeof installRecord.integrity === "string" ? installRecord.integrity.trim() : "";
+  if (!integrity) {
+    return `plugins.requireInstallIntegrity is enabled, but "${params.pluginId}" install record has no integrity hash.`;
+  }
+
+  const expectedVersionRaw =
+    typeof installRecord.resolvedVersion === "string"
+      ? installRecord.resolvedVersion
+      : installRecord.version;
+  const expectedVersion = expectedVersionRaw?.trim();
+  let loadedVersion = params.pluginVersion?.trim();
+  if (!loadedVersion) {
+    const packagePath = path.join(path.dirname(params.pluginSource), "package.json");
+    if (fs.existsSync(packagePath)) {
+      try {
+        const packageRaw = fs.readFileSync(packagePath, "utf-8");
+        const parsed = JSON.parse(packageRaw) as { version?: unknown };
+        if (typeof parsed.version === "string" && parsed.version.trim()) {
+          loadedVersion = parsed.version.trim();
+        }
+      } catch {
+        // Ignore package.json parse issues and continue without loaded version enforcement.
+      }
+    }
+  }
+  if (expectedVersion && loadedVersion && expectedVersion !== loadedVersion) {
+    return (
+      `plugins.requireInstallIntegrity is enabled, but "${params.pluginId}" version drifted ` +
+      `(record=${expectedVersion}, loaded=${loadedVersion}).`
+    );
+  }
+
+  return null;
+}
+
 function warnWhenAllowlistIsOpen(params: {
   logger: PluginLogger;
   pluginsEnabled: boolean;
@@ -470,6 +521,28 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
       continue;
+    }
+    if (normalized.requireInstallIntegrity) {
+      const integrityFailure = resolveInstallIntegrityFailure({
+        config: cfg,
+        pluginId,
+        pluginVersion: manifestRecord.version,
+        pluginSource: candidate.source,
+        origin: candidate.origin,
+      });
+      if (integrityFailure) {
+        record.status = "error";
+        record.error = integrityFailure;
+        registry.plugins.push(record);
+        seenIds.set(pluginId, candidate.origin);
+        registry.diagnostics.push({
+          level: "error",
+          pluginId: record.id,
+          source: record.source,
+          message: record.error,
+        });
+        continue;
+      }
     }
 
     if (!manifestRecord.configSchema) {

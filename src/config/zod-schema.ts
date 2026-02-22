@@ -644,6 +644,7 @@ export const OpenClawSchema = z
     plugins: z
       .object({
         enabled: z.boolean().optional(),
+        requireInstallIntegrity: z.boolean().optional(),
         allow: z.array(z.string()).optional(),
         deny: z.array(z.string()).optional(),
         load: z
