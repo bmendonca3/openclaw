@@ -1,12 +1,26 @@
 import { collectTextContentBlocks } from "../../agents/content-blocks.js";
 import { createOpenClawTools } from "../../agents/openclaw-tools.js";
+import {
+  resolveEffectiveToolPolicy,
+  resolveGroupToolPolicy,
+  resolveSubagentToolPolicy,
+} from "../../agents/pi-tools.policy.js";
 import type { SkillCommandSpec } from "../../agents/skills.js";
+import { getSubagentDepthFromSessionStore } from "../../agents/subagent-depth.js";
+import {
+  applyToolPolicyPipeline,
+  buildDefaultToolPolicyPipelineSteps,
+} from "../../agents/tool-policy-pipeline.js";
 import { applyOwnerOnlyToolPolicy } from "../../agents/tool-policy.js";
+import { mergeAlsoAllowPolicy, resolveToolProfilePolicy } from "../../agents/tool-policy.js";
 import { getChannelDock } from "../../channels/dock.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
+import { logWarn } from "../../logger.js";
+import { getPluginToolMeta } from "../../plugins/tools.js";
+import { isSubagentSessionKey } from "../../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../../utils/message-channel.js";
 import {
   listReservedChatSlashCommandNames,
@@ -203,9 +217,63 @@ export async function handleInlineActions(params: {
         workspaceDir,
         config: cfg,
       });
-      const authorizedTools = applyOwnerOnlyToolPolicy(tools, command.senderIsOwner);
+      const ownerFilteredTools = applyOwnerOnlyToolPolicy(tools, command.senderIsOwner);
+      const {
+        agentId: scopedAgentId,
+        globalPolicy,
+        globalProviderPolicy,
+        agentPolicy,
+        agentProviderPolicy,
+        profile,
+        providerProfile,
+        profileAlsoAllow,
+        providerProfileAlsoAllow,
+      } = resolveEffectiveToolPolicy({
+        config: cfg,
+        sessionKey,
+        modelProvider: provider,
+        modelId: model,
+      });
+      const profilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
+        resolveToolProfilePolicy(profile),
+        profileAlsoAllow,
+      );
+      const providerProfilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
+        resolveToolProfilePolicy(providerProfile),
+        providerProfileAlsoAllow,
+      );
+      const groupPolicy = resolveGroupToolPolicy({
+        config: cfg,
+        sessionKey,
+        messageProvider: channel,
+        accountId: (ctx as { AccountId?: string }).AccountId ?? null,
+        senderId: command.senderId ?? null,
+      });
+      const subagentPolicy = isSubagentSessionKey(sessionKey)
+        ? resolveSubagentToolPolicy(cfg, getSubagentDepthFromSessionStore(sessionKey, { cfg }))
+        : undefined;
+      const policyFilteredTools = applyToolPolicyPipeline({
+        tools: ownerFilteredTools,
+        toolMeta: (tool) => getPluginToolMeta(tool),
+        warn: logWarn,
+        steps: [
+          ...buildDefaultToolPolicyPipelineSteps({
+            profilePolicy: profilePolicyWithAlsoAllow,
+            profile,
+            providerProfilePolicy: providerProfilePolicyWithAlsoAllow,
+            providerProfile,
+            globalPolicy,
+            globalProviderPolicy,
+            agentPolicy,
+            agentProviderPolicy,
+            groupPolicy,
+            agentId: scopedAgentId,
+          }),
+          { policy: subagentPolicy, label: "subagent tools.allow" },
+        ],
+      });
 
-      const tool = authorizedTools.find((candidate) => candidate.name === dispatch.toolName);
+      const tool = policyFilteredTools.find((candidate) => candidate.name === dispatch.toolName);
       if (!tool) {
         typing.cleanup();
         return { kind: "reply", reply: { text: `❌ Tool not available: ${dispatch.toolName}` } };
