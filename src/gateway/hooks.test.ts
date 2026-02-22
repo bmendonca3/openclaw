@@ -213,9 +213,24 @@ describe("gateway hooks helpers", () => {
     expect(denied.ok).toBe(false);
   });
 
-  test("resolveHookSessionKey allows request sessionKey when explicitly enabled", () => {
+  test("resolveHooksConfig requires prefixes when request sessionKey override is enabled", () => {
+    expect(() =>
+      resolveHooksConfig({
+        hooks: { enabled: true, token: "secret", allowRequestSessionKey: true },
+      } as OpenClawConfig),
+    ).toThrow(
+      "hooks.allowRequestSessionKey=true requires non-empty hooks.allowedSessionKeyPrefixes",
+    );
+  });
+
+  test("resolveHookSessionKey allows request sessionKey when explicitly enabled with prefixes", () => {
     const cfg = {
-      hooks: { enabled: true, token: "secret", allowRequestSessionKey: true },
+      hooks: {
+        enabled: true,
+        token: "secret",
+        allowRequestSessionKey: true,
+        allowedSessionKeyPrefixes: ["hook:"],
+      },
     } as OpenClawConfig;
     const resolved = resolveHooksConfig(cfg);
     expect(resolved).not.toBeNull();
