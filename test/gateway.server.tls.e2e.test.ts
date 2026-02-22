@@ -6,7 +6,7 @@ import {
   installGatewayTestHooks,
   startGatewayServer,
   testState,
-} from "./test-helpers.js";
+} from "../src/gateway/test-helpers.js";
 
 installGatewayTestHooks({ scope: "suite" });
 
