@@ -646,6 +646,7 @@ export const AgentEntrySchema = z
 export const ToolsSchema = z
   .object({
     ...CommonToolPolicyFields,
+    allowMode: z.enum(["strict", "compat"]).optional(),
     web: ToolsWebSchema,
     media: ToolsMediaSchema,
     links: ToolsLinksSchema,

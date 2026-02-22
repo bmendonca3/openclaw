@@ -476,6 +476,7 @@ export function createOpenClawCodingTools(options?: {
     tools: toolsByAuthorization,
     toolMeta: (tool) => getPluginToolMeta(tool),
     warn: logWarn,
+    allowMode: options?.config?.tools?.allowMode === "compat" ? "compat" : "strict",
     steps: [
       ...buildDefaultToolPolicyPipelineSteps({
         profilePolicy: profilePolicyWithAlsoAllow,

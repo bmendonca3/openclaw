@@ -382,6 +382,12 @@ export type MemorySearchConfig = {
 export type ToolsConfig = {
   /** Base tool profile applied before allow/deny lists. */
   profile?: ToolProfileId;
+  /**
+   * Allowlist resolution mode:
+   * - strict (default): unknown tools/groups in allowlists are rejected.
+   * - compat: keep legacy warn-and-ignore behavior for unknown entries.
+   */
+  allowMode?: "strict" | "compat";
   allow?: string[];
   /** Additional allowlist entries merged into allow and/or profile allowlist. */
   alsoAllow?: string[];

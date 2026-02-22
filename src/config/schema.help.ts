@@ -79,6 +79,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Restrict apply_patch paths to the workspace directory (default: true). Set false to allow writing outside the workspace (dangerous).",
   "tools.exec.applyPatch.allowModels":
     'Optional allowlist of model ids (e.g. "gpt-5.2" or "openai/gpt-5.2").',
+  "tools.allowMode":
+    'Allowlist behavior for unknown tool/group entries ("strict" default rejects unknowns, "compat" keeps warning-only legacy behavior).',
   "tools.loopDetection.enabled":
     "Enable repetitive tool-call loop detection and backoff safety checks (default: false).",
   "tools.loopDetection.historySize": "Tool history window size for loop detection (default: 30).",

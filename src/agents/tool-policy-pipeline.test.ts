@@ -24,7 +24,7 @@ describe("tool-policy-pipeline", () => {
     expect(names).toEqual(["exec", "plugin_tool"]);
   });
 
-  test("warns about unknown allowlist entries", () => {
+  test("warns about unknown allowlist entries in compat mode", () => {
     const warnings: string[] = [];
     const tools = [{ name: "exec" }] as unknown as DummyTool[];
     applyToolPolicyPipeline({
@@ -33,6 +33,7 @@ describe("tool-policy-pipeline", () => {
       // oxlint-disable-next-line typescript/no-explicit-any
       toolMeta: () => undefined,
       warn: (msg) => warnings.push(msg),
+      allowMode: "compat",
       steps: [
         {
           policy: { allow: ["wat"] },
@@ -43,6 +44,27 @@ describe("tool-policy-pipeline", () => {
     });
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toContain("unknown entries (wat)");
+  });
+
+  test("fails closed on unknown allowlist entries in strict mode", () => {
+    const tools = [{ name: "exec" }] as unknown as DummyTool[];
+    expect(() =>
+      applyToolPolicyPipeline({
+        // oxlint-disable-next-line typescript/no-explicit-any
+        tools: tools as any,
+        // oxlint-disable-next-line typescript/no-explicit-any
+        toolMeta: () => undefined,
+        warn: () => {},
+        allowMode: "strict",
+        steps: [
+          {
+            policy: { allow: ["pluginToolThatIsntLoaded"] },
+            label: "tools.allow",
+            stripPluginOnlyAllowlist: true,
+          },
+        ],
+      }),
+    ).toThrow(/unknown entries \(plugintoolthatisntloaded\)/i);
   });
 
   test("applies allowlist filtering when core tools are explicitly listed", () => {

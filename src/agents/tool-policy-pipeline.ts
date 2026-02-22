@@ -14,6 +14,8 @@ export type ToolPolicyPipelineStep = {
   stripPluginOnlyAllowlist?: boolean;
 };
 
+export type ToolAllowMode = "strict" | "compat";
+
 export function buildDefaultToolPolicyPipelineSteps(params: {
   profilePolicy?: ToolPolicyLike;
   profile?: string;
@@ -66,8 +68,10 @@ export function applyToolPolicyPipeline(params: {
   tools: AnyAgentTool[];
   toolMeta: (tool: AnyAgentTool) => { pluginId: string } | undefined;
   warn: (message: string) => void;
+  allowMode?: ToolAllowMode;
   steps: ToolPolicyPipelineStep[];
 }): AnyAgentTool[] {
+  const allowMode: ToolAllowMode = params.allowMode ?? "strict";
   const coreToolNames = new Set(
     params.tools
       .filter((tool) => !params.toolMeta(tool))
@@ -91,6 +95,11 @@ export function applyToolPolicyPipeline(params: {
       const resolved = stripPluginOnlyAllowlist(policy, pluginGroups, coreToolNames);
       if (resolved.unknownAllowlist.length > 0) {
         const entries = resolved.unknownAllowlist.join(", ");
+        if (allowMode === "strict") {
+          throw new Error(
+            `tools: ${step.label} allowlist contains unknown entries (${entries}). Remove/fix these entries or set tools.allowMode="compat" to retain legacy warning-only behavior.`,
+          );
+        }
         const suffix = resolved.strippedAllowlist
           ? "Ignoring allowlist so core tools remain available. Use tools.alsoAllow for additive plugin tool enablement."
           : "These entries won't match any tool unless the plugin is enabled.";
