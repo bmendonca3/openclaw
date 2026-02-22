@@ -11,6 +11,8 @@ export type GatewayTlsConfig = {
   keyPath?: string;
   /** Optional PEM CA bundle for TLS clients (mTLS or custom roots). */
   caPath?: string;
+  /** Optional PEM CA bundle used to verify client certs for mTLS. */
+  clientCaPath?: string;
 };
 
 export type WideAreaDiscoveryConfig = {

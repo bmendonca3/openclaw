@@ -16,6 +16,8 @@ export type GatewayTlsRuntime = {
   certPath?: string;
   keyPath?: string;
   caPath?: string;
+  clientCaPath?: string;
+  mTlsEnabled?: boolean;
   fingerprintSha256?: string;
   tlsOptions?: tls.TlsOptions;
   error?: string;
@@ -67,6 +69,7 @@ async function generateSelfSignedCert(params: {
 export async function loadGatewayTlsRuntime(
   cfg: GatewayTlsConfig | undefined,
   log?: { info?: (msg: string) => void; warn?: (msg: string) => void },
+  opts?: { requireClientCert?: boolean },
 ): Promise<GatewayTlsRuntime> {
   if (!cfg || cfg.enabled !== true) {
     return { enabled: false, required: false };
@@ -77,6 +80,8 @@ export async function loadGatewayTlsRuntime(
   const certPath = resolveUserPath(cfg.certPath ?? path.join(baseDir, "gateway-cert.pem"));
   const keyPath = resolveUserPath(cfg.keyPath ?? path.join(baseDir, "gateway-key.pem"));
   const caPath = cfg.caPath ? resolveUserPath(cfg.caPath) : undefined;
+  const clientCaPath = cfg.clientCaPath ? resolveUserPath(cfg.clientCaPath) : undefined;
+  const requireClientCert = opts?.requireClientCert === true;
 
   const hasCert = await fileExists(certPath);
   const hasKey = await fileExists(keyPath);
@@ -105,10 +110,36 @@ export async function loadGatewayTlsRuntime(
     };
   }
 
+  if (clientCaPath && !(await fileExists(clientCaPath))) {
+    return {
+      enabled: false,
+      required: true,
+      certPath,
+      keyPath,
+      caPath,
+      clientCaPath,
+      error: "gateway tls: client CA bundle missing",
+    };
+  }
+
   try {
     const cert = await fs.readFile(certPath, "utf8");
     const key = await fs.readFile(keyPath, "utf8");
     const ca = caPath ? await fs.readFile(caPath, "utf8") : undefined;
+    const clientCa = clientCaPath ? await fs.readFile(clientCaPath, "utf8") : undefined;
+    const mtlsCa = clientCa ?? ca;
+    if (requireClientCert && !mtlsCa) {
+      return {
+        enabled: false,
+        required: true,
+        certPath,
+        keyPath,
+        caPath,
+        clientCaPath,
+        error:
+          "gateway tls: mTLS requires gateway.tls.clientCaPath (or gateway.tls.caPath for legacy compatibility)",
+      };
+    }
     const x509 = new X509Certificate(cert);
     const fingerprintSha256 = normalizeFingerprint(x509.fingerprint256 ?? "");
 
@@ -119,6 +150,7 @@ export async function loadGatewayTlsRuntime(
         certPath,
         keyPath,
         caPath,
+        clientCaPath,
         error: "gateway tls: unable to compute certificate fingerprint",
       };
     }
@@ -129,11 +161,15 @@ export async function loadGatewayTlsRuntime(
       certPath,
       keyPath,
       caPath,
+      clientCaPath,
+      mTlsEnabled: requireClientCert && Boolean(mtlsCa),
       fingerprintSha256,
       tlsOptions: {
         cert,
         key,
-        ca,
+        ca: mtlsCa ?? ca,
+        requestCert: requireClientCert && Boolean(mtlsCa),
+        rejectUnauthorized: requireClientCert && Boolean(mtlsCa),
         minVersion: "TLSv1.3",
       },
     };
@@ -144,6 +180,7 @@ export async function loadGatewayTlsRuntime(
       certPath,
       keyPath,
       caPath,
+      clientCaPath,
       error: `gateway tls: failed to load cert (${String(err)})`,
     };
   }

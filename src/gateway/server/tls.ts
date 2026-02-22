@@ -9,6 +9,7 @@ export type { GatewayTlsRuntime } from "../../infra/tls/gateway.js";
 export async function loadGatewayTlsRuntime(
   cfg: GatewayTlsConfig | undefined,
   log?: { info?: (msg: string) => void; warn?: (msg: string) => void },
+  opts?: { requireClientCert?: boolean },
 ): Promise<GatewayTlsRuntime> {
-  return await loadGatewayTlsRuntimeConfig(cfg, log);
+  return await loadGatewayTlsRuntimeConfig(cfg, log, opts);
 }
