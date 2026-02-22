@@ -22,6 +22,14 @@ export type SkillsInstallConfig = {
   nodeManager?: "npm" | "pnpm" | "yarn" | "bun";
 };
 
+export type SkillsCommandDispatchConfig = {
+  /**
+   * Tool allowlist for deterministic skill `command-dispatch: tool`.
+   * Default behavior is deny-all when unset/empty.
+   */
+  allowTools?: string[];
+};
+
 export type SkillsLimitsConfig = {
   /** Max number of immediate child directories to consider under a skills root before treating it as suspicious. */
   maxCandidatesPerRoot?: number;
@@ -38,6 +46,7 @@ export type SkillsLimitsConfig = {
 export type SkillsConfig = {
   /** Optional bundled-skill allowlist (only affects bundled skills). */
   allowBundled?: string[];
+  commandDispatch?: SkillsCommandDispatchConfig;
   load?: SkillsLoadConfig;
   install?: SkillsInstallConfig;
   limits?: SkillsLimitsConfig;

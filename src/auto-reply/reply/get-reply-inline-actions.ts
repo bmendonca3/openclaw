@@ -1,5 +1,6 @@
 import { collectTextContentBlocks } from "../../agents/content-blocks.js";
 import { createOpenClawTools } from "../../agents/openclaw-tools.js";
+import { isToolAllowedByPolicyName } from "../../agents/pi-tools.policy.js";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import { applyOwnerOnlyToolPolicy } from "../../agents/tool-policy.js";
 import { getChannelDock } from "../../channels/dock.js";
@@ -45,6 +46,18 @@ function resolveSlashCommandName(commandBodyNormalized: string): string | null {
   const match = trimmed.match(/^\/([^\s:]+)(?::|\s|$)/);
   const name = match?.[1]?.trim().toLowerCase() ?? "";
   return name ? name : null;
+}
+
+function isSkillDispatchToolAllowed(cfg: OpenClawConfig, toolName: string): boolean {
+  const allowToolsRaw = cfg.skills?.commandDispatch?.allowTools;
+  const allowTools =
+    Array.isArray(allowToolsRaw) && allowToolsRaw.length > 0
+      ? allowToolsRaw.map((entry) => String(entry).trim()).filter(Boolean)
+      : [];
+  if (allowTools.length === 0) {
+    return false;
+  }
+  return isToolAllowedByPolicyName(toolName, { allow: allowTools });
 }
 
 export type InlineActionResult =
@@ -187,6 +200,14 @@ export async function handleInlineActions(params: {
 
     const dispatch = skillInvocation.command.dispatch;
     if (dispatch?.kind === "tool") {
+      if (!isSkillDispatchToolAllowed(cfg, dispatch.toolName)) {
+        typing.cleanup();
+        return {
+          kind: "reply",
+          reply: { text: `❌ Skill dispatch blocked by config for tool: ${dispatch.toolName}` },
+        };
+      }
+
       const rawArgs = (skillInvocation.args ?? "").trim();
       const channel =
         resolveGatewayMessageChannel(ctx.Surface) ??

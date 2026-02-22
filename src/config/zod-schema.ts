@@ -598,6 +598,12 @@ export const OpenClawSchema = z
     skills: z
       .object({
         allowBundled: z.array(z.string()).optional(),
+        commandDispatch: z
+          .object({
+            allowTools: z.array(z.string()).optional(),
+          })
+          .strict()
+          .optional(),
         load: z
           .object({
             extraDirs: z.array(z.string()).optional(),
