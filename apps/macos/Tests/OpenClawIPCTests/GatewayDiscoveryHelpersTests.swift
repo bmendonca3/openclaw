@@ -62,7 +62,12 @@ struct GatewayDiscoveryHelpersTests {
         let wsGateway = self.makeGateway(
             serviceHost: "resolved.example.ts.net",
             servicePort: 18789)
-        #expect(GatewayDiscoveryHelpers.directUrl(for: wsGateway) == "ws://resolved.example.ts.net:18789")
+        #expect(GatewayDiscoveryHelpers.directUrl(for: wsGateway) == "wss://resolved.example.ts.net:18789")
+
+        let loopbackGateway = self.makeGateway(
+            serviceHost: "127.0.0.1",
+            servicePort: 18789)
+        #expect(GatewayDiscoveryHelpers.directUrl(for: loopbackGateway) == "ws://127.0.0.1:18789")
     }
 
     @Test func directUrlRejectsTxtOnlyFallback() {
