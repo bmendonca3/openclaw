@@ -487,9 +487,13 @@ describe("node.invoke approval bypass", () => {
       });
       expect(invokeOk.ok).toBe(true);
       expect(lastInvokeParams).toBeTruthy();
-      const env = (lastInvokeParams?.env ?? null) as Record<string, unknown> | null;
+      if (!lastInvokeParams) {
+        throw new Error("expected invoke params");
+      }
+      const invokeParams = lastInvokeParams;
+      const env = (invokeParams["env"] ?? null) as Record<string, unknown> | null;
       expect(env?.FOO).toBe("bar");
-      expect(lastInvokeParams?.timeoutMs).toBe(600_000);
+      expect(invokeParams["timeoutMs"]).toBe(600_000);
 
       const mismatchApprovalId = await requestAllowOnceApproval(
         wsApprover,
