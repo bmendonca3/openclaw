@@ -50,6 +50,31 @@ const DANGEROUS_HOST_ENV_VARS = new Set([
 ]);
 const DANGEROUS_HOST_ENV_PREFIXES = ["DYLD_", "LD_"];
 
+function isDangerousHostEnvKey(upperKey: string): boolean {
+  if (DANGEROUS_HOST_ENV_PREFIXES.some((prefix) => upperKey.startsWith(prefix))) {
+    return true;
+  }
+  return DANGEROUS_HOST_ENV_VARS.has(upperKey);
+}
+
+// Sanitize inherited host env before merge so dangerous variables from process.env
+// are not propagated into non-sandboxed executions.
+export function sanitizeHostBaseEnv(env: Record<string, string>): Record<string, string> {
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    const upperKey = key.toUpperCase();
+    if (upperKey === "PATH") {
+      sanitized[key] = value;
+      continue;
+    }
+    if (isDangerousHostEnvKey(upperKey)) {
+      continue;
+    }
+    sanitized[key] = value;
+  }
+  return sanitized;
+}
+
 // Centralized sanitization helper.
 // Throws an error if dangerous variables or PATH modifications are detected on the host.
 export function validateHostEnv(env: Record<string, string>): void {
@@ -57,12 +82,7 @@ export function validateHostEnv(env: Record<string, string>): void {
     const upperKey = key.toUpperCase();
 
     // 1. Block known dangerous variables (Fail Closed)
-    if (DANGEROUS_HOST_ENV_PREFIXES.some((prefix) => upperKey.startsWith(prefix))) {
-      throw new Error(
-        `Security Violation: Environment variable '${key}' is forbidden during host execution.`,
-      );
-    }
-    if (DANGEROUS_HOST_ENV_VARS.has(upperKey)) {
+    if (isDangerousHostEnvKey(upperKey)) {
       throw new Error(
         `Security Violation: Environment variable '${key}' is forbidden during host execution.`,
       );
