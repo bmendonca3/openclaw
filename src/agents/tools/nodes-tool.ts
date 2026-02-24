@@ -574,10 +574,9 @@ export function createNodesTool(options?: {
                 host: "node",
                 agentId,
                 sessionKey,
-                turnSourceChannel,
-                turnSourceTo,
-                turnSourceAccountId,
-                turnSourceThreadId,
+                env,
+                runTimeoutMs: commandTimeoutMs,
+                needsScreenRecording,
                 timeoutMs: APPROVAL_TIMEOUT_MS,
               },
             );

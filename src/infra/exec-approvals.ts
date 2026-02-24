@@ -52,7 +52,20 @@ export type ExecApprovalRequestPayload = {
 
 export type ExecApprovalRequest = {
   id: string;
-  request: ExecApprovalRequestPayload;
+  request: {
+    command: string;
+    cwd?: string | null;
+    nodeId?: string | null;
+    host?: string | null;
+    security?: string | null;
+    ask?: string | null;
+    agentId?: string | null;
+    resolvedPath?: string | null;
+    sessionKey?: string | null;
+    env?: Record<string, string> | null;
+    runTimeoutMs?: number | null;
+    needsScreenRecording?: boolean | null;
+  };
   createdAtMs: number;
   expiresAtMs: number;
 };
