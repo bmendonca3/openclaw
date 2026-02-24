@@ -282,14 +282,16 @@ export function isHookAgentAllowed(
   hooksConfig: HooksConfigResolved,
   agentId: string | undefined,
 ): boolean {
-  // Keep backwards compatibility for callers that omit agentId.
-  const raw = agentId?.trim();
-  if (!raw) {
-    return true;
-  }
   const allowed = hooksConfig.agentPolicy.allowedAgentIds;
   if (allowed === undefined) {
     return true;
+  }
+  // Caller omitted agentId: only allow when the configured default target is
+  // explicitly allowed. This keeps default routing possible while avoiding
+  // allowlist bypass-by-omission.
+  const raw = agentId?.trim();
+  if (!raw) {
+    return allowed.has(hooksConfig.agentPolicy.defaultAgentId);
   }
   const resolved = resolveHookTargetAgentId(hooksConfig, raw);
   return resolved ? allowed.has(resolved) : false;

@@ -318,10 +318,6 @@ describe("gateway server hooks", () => {
     };
     await withGatewayServer(async ({ port }) => {
       cronIsolatedRun.mockClear();
-      cronIsolatedRun.mockResolvedValueOnce({
-        status: "ok",
-        summary: "done",
-      });
       const resNoAgent = await fetch(`http://127.0.0.1:${port}/hooks/agent`, {
         method: "POST",
         headers: {
@@ -330,13 +326,11 @@ describe("gateway server hooks", () => {
         },
         body: JSON.stringify({ message: "No explicit agent" }),
       });
-      expect(resNoAgent.status).toBe(202);
-      await waitForSystemEvent();
-      const noAgentCall = (cronIsolatedRun.mock.calls[0] as unknown[] | undefined)?.[0] as {
-        job?: { agentId?: string };
-      };
-      expect(noAgentCall?.job?.agentId).toBeUndefined();
-      drainSystemEvents(resolveMainKey());
+      expect(resNoAgent.status).toBe(400);
+      const noAgentBody = (await resNoAgent.json()) as { error?: string };
+      expect(noAgentBody.error).toContain("hooks.allowedAgentIds");
+      expect(cronIsolatedRun).not.toHaveBeenCalled();
+      expect(peekSystemEvents(resolveMainKey()).length).toBe(0);
 
       cronIsolatedRun.mockClear();
       cronIsolatedRun.mockResolvedValueOnce({
@@ -396,6 +390,18 @@ describe("gateway server hooks", () => {
       list: [{ id: "main", default: true }, { id: "hooks" }],
     };
     await withGatewayServer(async ({ port }) => {
+      const resNoAgent = await fetch(`http://127.0.0.1:${port}/hooks/agent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer hook-secret",
+        },
+        body: JSON.stringify({ message: "Denied by omission" }),
+      });
+      expect(resNoAgent.status).toBe(400);
+      const noAgentBody = (await resNoAgent.json()) as { error?: string };
+      expect(noAgentBody.error).toContain("hooks.allowedAgentIds");
+
       const resDenied = await fetch(`http://127.0.0.1:${port}/hooks/agent`, {
         method: "POST",
         headers: {
