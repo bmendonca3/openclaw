@@ -186,6 +186,36 @@ describe("agentCommand", () => {
     });
   });
 
+  it("defaults senderIsOwner to true", async () => {
+    await withTempHome(async (home) => {
+      const callArgs = await runWithDefaultAgentConfig({
+        home,
+        args: { message: "hi", to: "+1555" },
+      });
+      expect(callArgs?.senderIsOwner).toBe(true);
+    });
+  });
+
+  it("respects explicit senderIsOwner=false", async () => {
+    await withTempHome(async (home) => {
+      const callArgs = await runWithDefaultAgentConfig({
+        home,
+        args: {
+          message: "hi from external",
+          sessionKey: "node-test-session",
+          messageChannel: "node",
+          senderIsOwner: false,
+          inputProvenance: {
+            kind: "external_user",
+            sourceChannel: "node",
+            sourceTool: "gateway.openai_http.chat_completions",
+          },
+        },
+      });
+      expect(callArgs?.senderIsOwner).toBe(false);
+    });
+  });
+
   it("resumes when session-id is provided", async () => {
     await withTempHome(async (home) => {
       const store = path.join(home, "sessions.json");

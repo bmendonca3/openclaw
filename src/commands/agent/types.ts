@@ -73,6 +73,8 @@ export type AgentCommandOpts = {
   lane?: string;
   runId?: string;
   extraSystemPrompt?: string;
+  /** Owner authorization for owner-only tools (gateway/cron/etc). */
+  senderIsOwner?: boolean;
   inputProvenance?: InputProvenance;
   /** Per-call stream param overrides (best-effort). */
   streamParams?: AgentStreamParams;
