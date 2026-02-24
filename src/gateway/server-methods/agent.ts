@@ -463,6 +463,7 @@ export const agentHandlers: GatewayRequestHandlers = {
     }
 
     const runId = idem;
+    const senderIsOwner = client?.connect?.scopes?.includes("operator.admin") === true;
     const connId = typeof client?.connId === "string" ? client.connId : undefined;
     const wantsToolEvents = hasGatewayClientCap(
       client?.connect?.caps,
@@ -623,6 +624,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         lane: request.lane,
         extraSystemPrompt: request.extraSystemPrompt,
         inputProvenance,
+        senderIsOwner,
       },
       defaultRuntime,
       context.deps,

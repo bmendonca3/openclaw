@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { BARE_SESSION_RESET_PROMPT } from "../../auto-reply/reply/session-reset-prompt.js";
 import { agentHandlers } from "./agent.js";
-import type { GatewayRequestContext } from "./types.js";
+import type { GatewayClient, GatewayRequestContext } from "./types.js";
 
 const mocks = vi.hoisted(() => ({
   loadSessionEntry: vi.fn(),
@@ -184,8 +184,7 @@ async function invokeAgent(
     respond?: ReturnType<typeof vi.fn>;
     reqId?: string;
     context?: GatewayRequestContext;
-    client?: AgentHandlerArgs["client"];
-    isWebchatConnect?: AgentHandlerArgs["isWebchatConnect"];
+    client?: GatewayClient | null;
   },
 ) {
   const respond = options?.respond ?? vi.fn();
@@ -195,7 +194,7 @@ async function invokeAgent(
     context: options?.context ?? makeContext(),
     req: { type: "req", id: options?.reqId ?? "agent-test-req", method: "agent" },
     client: options?.client ?? null,
-    isWebchatConnect: options?.isWebchatConnect ?? (() => false),
+    isWebchatConnect: () => false,
   });
   return respond;
 }
@@ -348,54 +347,58 @@ describe("gateway agent handler", () => {
     expect(callArgs.bestEffortDeliver).toBe(false);
   });
 
-  it("keeps origin messageChannel as webchat while delivery channel uses last session channel", async () => {
-    mockMainSessionEntry({
-      sessionId: "existing-session-id",
-      lastChannel: "telegram",
-      lastTo: "12345",
-    });
-    mocks.updateSessionStore.mockImplementation(async (_path, updater) => {
-      const store: Record<string, unknown> = {
-        "agent:main:main": {
-          sessionId: "existing-session-id",
-          updatedAt: Date.now(),
-          lastChannel: "telegram",
-          lastTo: "12345",
-        },
-      };
-      return await updater(store);
-    });
-    mocks.agentCommand.mockResolvedValue({
-      payloads: [{ text: "ok" }],
-      meta: { durationMs: 100 },
-    });
+  it("binds senderIsOwner=false for operator.write callers", async () => {
+    primeMainAgentRun();
 
     await invokeAgent(
       {
-        message: "webchat turn",
+        message: "scope gate",
         sessionKey: "agent:main:main",
-        idempotencyKey: "test-webchat-origin-channel",
+        idempotencyKey: "sender-owner-write",
+        inputProvenance: {
+          kind: "internal_system",
+          sourceChannel: "webchat",
+          sourceTool: "client.assertion",
+        },
       },
       {
-        reqId: "webchat-origin-1",
+        reqId: "sender-owner-write-req",
         client: {
-          connect: {
-            client: { id: "webchat-ui", mode: "webchat" },
-          },
-        } as AgentHandlerArgs["client"],
-        isWebchatConnect: () => true,
+          connect: { role: "operator", scopes: ["operator.write"] },
+        } as GatewayClient,
       },
     );
 
     await vi.waitFor(() => expect(mocks.agentCommand).toHaveBeenCalled());
-    const callArgs = mocks.agentCommand.mock.calls.at(-1)?.[0] as {
-      channel?: string;
-      messageChannel?: string;
-      runContext?: { messageChannel?: string };
-    };
-    expect(callArgs.channel).toBe("telegram");
-    expect(callArgs.messageChannel).toBe("webchat");
-    expect(callArgs.runContext?.messageChannel).toBe("webchat");
+    const callArgs = mocks.agentCommand.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(callArgs.senderIsOwner).toBe(false);
+  });
+
+  it("binds senderIsOwner=true for operator.admin callers", async () => {
+    primeMainAgentRun();
+
+    await invokeAgent(
+      {
+        message: "scope gate admin",
+        sessionKey: "agent:main:main",
+        idempotencyKey: "sender-owner-admin",
+        inputProvenance: {
+          kind: "external_user",
+          sourceChannel: "webchat",
+          sourceTool: "client.payload",
+        },
+      },
+      {
+        reqId: "sender-owner-admin-req",
+        client: {
+          connect: { role: "operator", scopes: ["operator.admin"] },
+        } as GatewayClient,
+      },
+    );
+
+    await vi.waitFor(() => expect(mocks.agentCommand).toHaveBeenCalled());
+    const callArgs = mocks.agentCommand.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(callArgs.senderIsOwner).toBe(true);
   });
 
   it("handles missing cliSessionIds gracefully", async () => {
