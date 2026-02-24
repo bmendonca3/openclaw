@@ -201,6 +201,9 @@ export async function executeNodeHostCommand(
         ask: hostAsk,
         agentId: params.agentId,
         sessionKey: params.sessionKey,
+        env: nodeEnv,
+        runTimeoutMs:
+          typeof params.timeoutSec === "number" ? Math.max(1, params.timeoutSec * 1000) : undefined,
       });
       expiresAtMs = registration.expiresAtMs;
       preResolvedDecision = registration.finalDecision;

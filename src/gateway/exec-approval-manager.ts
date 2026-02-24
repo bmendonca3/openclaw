@@ -14,6 +14,9 @@ export type ExecApprovalRequestPayload = {
   agentId?: string | null;
   resolvedPath?: string | null;
   sessionKey?: string | null;
+  env?: Record<string, string> | null;
+  runTimeoutMs?: number | null;
+  needsScreenRecording?: boolean | null;
 };
 
 export type ExecApprovalRecord = {

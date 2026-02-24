@@ -486,6 +486,9 @@ export function createNodesTool(options?: {
                 host: "node",
                 agentId,
                 sessionKey,
+                env,
+                runTimeoutMs: commandTimeoutMs,
+                needsScreenRecording,
                 timeoutMs: APPROVAL_TIMEOUT_MS,
               },
             );

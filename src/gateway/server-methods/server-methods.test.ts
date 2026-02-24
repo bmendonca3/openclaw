@@ -362,6 +362,21 @@ describe("exec approval handlers", () => {
       };
       expect(validateExecApprovalRequestParams(params)).toBe(true);
     });
+
+    it("accepts request with run-shaping fields for node approvals", () => {
+      const params = {
+        command: "echo hi",
+        cwd: "/tmp",
+        nodeId: "node-1",
+        host: "node",
+        env: {
+          FOO: "bar",
+        },
+        runTimeoutMs: 60_000,
+        needsScreenRecording: false,
+      };
+      expect(validateExecApprovalRequestParams(params)).toBe(true);
+    });
   });
 
   it("rejects host=node approval requests without nodeId", async () => {

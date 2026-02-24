@@ -48,6 +48,63 @@ function normalizeApprovalDecision(value: unknown): "allow-once" | "allow-always
   return s === "allow-once" || s === "allow-always" ? s : null;
 }
 
+function normalizeBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function normalizePositiveInt(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  const n = Math.floor(value);
+  return n > 0 ? n : null;
+}
+
+type NormalizedApprovalEnv = Array<readonly [string, string]>;
+
+function normalizeApprovalEnv(value: unknown): NormalizedApprovalEnv | null {
+  const obj = asRecord(value);
+  if (!obj) {
+    return null;
+  }
+  const entries: Array<[string, string]> = [];
+  for (const [rawKey, rawValue] of Object.entries(obj)) {
+    if (typeof rawValue !== "string") {
+      continue;
+    }
+    const key = rawKey.trim();
+    if (!key) {
+      continue;
+    }
+    entries.push([key, rawValue]);
+  }
+  if (entries.length === 0) {
+    return null;
+  }
+  entries.sort(([a], [b]) => a.localeCompare(b));
+  return entries;
+}
+
+function isSameApprovalEnv(
+  a: NormalizedApprovalEnv | null,
+  b: NormalizedApprovalEnv | null,
+): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i];
+    const right = b[i];
+    if (!left || !right || left[0] !== right[0] || left[1] !== right[1]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function clientHasApprovals(client: ApprovalClient | null): boolean {
   const scopes = Array.isArray(client?.connect?.scopes) ? client?.connect?.scopes : [];
   return scopes.includes("operator.admin") || scopes.includes("operator.approvals");
@@ -81,6 +138,24 @@ function approvalMatchesRequest(
   const reqSessionKey = record.request.sessionKey ?? null;
   const runSessionKey = normalizeString(params.sessionKey) ?? null;
   if (reqSessionKey !== runSessionKey) {
+    return false;
+  }
+
+  const reqRunTimeoutMs = normalizePositiveInt(record.request.runTimeoutMs) ?? null;
+  const runTimeoutMs = normalizePositiveInt(params.timeoutMs) ?? null;
+  if (reqRunTimeoutMs !== runTimeoutMs) {
+    return false;
+  }
+
+  const reqNeedsScreenRecording = normalizeBoolean(record.request.needsScreenRecording) ?? null;
+  const runNeedsScreenRecording = normalizeBoolean(params.needsScreenRecording) ?? null;
+  if (reqNeedsScreenRecording !== runNeedsScreenRecording) {
+    return false;
+  }
+
+  const reqEnv = normalizeApprovalEnv(record.request.env);
+  const runEnv = normalizeApprovalEnv(params.env);
+  if (!isSameApprovalEnv(reqEnv, runEnv)) {
     return false;
   }
 

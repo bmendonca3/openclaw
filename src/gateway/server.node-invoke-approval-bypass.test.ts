@@ -73,6 +73,11 @@ async function requestAllowOnceApproval(
   ws: WebSocket,
   command: string,
   nodeId: string,
+  options?: {
+    env?: Record<string, string>;
+    runTimeoutMs?: number;
+    needsScreenRecording?: boolean;
+  },
 ): Promise<string> {
   const approvalId = crypto.randomUUID();
   const requestP = rpcReq(ws, "exec.approval.request", {
@@ -81,6 +86,11 @@ async function requestAllowOnceApproval(
     nodeId,
     cwd: null,
     host: "node",
+    ...(options?.env && Object.keys(options.env).length > 0 ? { env: options.env } : {}),
+    ...(typeof options?.runTimeoutMs === "number" ? { runTimeoutMs: options.runTimeoutMs } : {}),
+    ...(typeof options?.needsScreenRecording === "boolean"
+      ? { needsScreenRecording: options.needsScreenRecording }
+      : {}),
     timeoutMs: 30_000,
   });
   await rpcReq(ws, "exec.approval.resolve", { id: approvalId, decision: "allow-once" });
@@ -433,6 +443,80 @@ describe("node.invoke approval bypass", () => {
       wsCaller.close();
       nodeA.stop();
       nodeB.stop();
+    }
+  });
+
+  test("binds env + timeout + screen flags to approval request metadata", async () => {
+    let invokeCount = 0;
+    let lastInvokeParams: Record<string, unknown> | null = null;
+    const node = await connectLinuxNode((payload) => {
+      invokeCount += 1;
+      const obj = payload as { paramsJSON?: unknown };
+      const raw = typeof obj?.paramsJSON === "string" ? obj.paramsJSON : "";
+      lastInvokeParams = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    });
+    const wsApprover = await connectOperator(["operator.write", "operator.approvals"]);
+    const wsCaller = await connectOperator(["operator.write"]);
+
+    try {
+      const nodeId = await getConnectedNodeId(wsApprover);
+      const runShape = {
+        env: { FOO: "bar", GIT_CONFIG_GLOBAL: "/tmp/poc-gitcfg" },
+        runTimeoutMs: 600_000,
+        needsScreenRecording: false,
+      } as const;
+      const approvalId = await requestAllowOnceApproval(wsApprover, "echo hi", nodeId, runShape);
+
+      const invokeOk = await rpcReq(wsCaller, "node.invoke", {
+        nodeId,
+        command: "system.run",
+        params: {
+          command: ["echo", "hi"],
+          rawCommand: "echo hi",
+          runId: approvalId,
+          approved: true,
+          approvalDecision: "allow-once",
+          env: runShape.env,
+          timeoutMs: runShape.runTimeoutMs,
+          needsScreenRecording: runShape.needsScreenRecording,
+        },
+        idempotencyKey: crypto.randomUUID(),
+      });
+      expect(invokeOk.ok).toBe(true);
+      expect(lastInvokeParams).toBeTruthy();
+      const env = (lastInvokeParams?.env ?? null) as Record<string, unknown> | null;
+      expect(env?.FOO).toBe("bar");
+      expect(lastInvokeParams?.timeoutMs).toBe(600_000);
+
+      const mismatchApprovalId = await requestAllowOnceApproval(
+        wsApprover,
+        "echo hi",
+        nodeId,
+        runShape,
+      );
+      const invokeCountBeforeMismatch = invokeCount;
+      const invokeMismatch = await rpcReq(wsCaller, "node.invoke", {
+        nodeId,
+        command: "system.run",
+        params: {
+          command: ["echo", "hi"],
+          rawCommand: "echo hi",
+          runId: mismatchApprovalId,
+          approved: true,
+          approvalDecision: "allow-once",
+          env: { FOO: "evil" },
+          timeoutMs: runShape.runTimeoutMs,
+          needsScreenRecording: runShape.needsScreenRecording,
+        },
+        idempotencyKey: crypto.randomUUID(),
+      });
+      expect(invokeMismatch.ok).toBe(false);
+      expect(invokeMismatch.error?.message ?? "").toContain("does not match request");
+      await expectNoForwardedInvoke(() => invokeCount > invokeCountBeforeMismatch);
+    } finally {
+      wsApprover.close();
+      wsCaller.close();
+      node.stop();
     }
   });
 });

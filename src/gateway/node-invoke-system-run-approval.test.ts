@@ -139,6 +139,62 @@ describe("sanitizeSystemRunParamsForForwarding", () => {
     });
     expectAllowOnceForwardingResult(result);
   });
+
+  test("rejects approval replay when env is not bound in the approval record", () => {
+    const result = sanitizeSystemRunParamsForForwarding({
+      rawParams: {
+        command: ["echo", "SAFE"],
+        rawCommand: "echo SAFE",
+        env: {
+          GIT_CONFIG_GLOBAL: "/tmp/payload",
+        },
+        runId: "approval-1",
+        approved: true,
+        approvalDecision: "allow-once",
+      },
+      nodeId: "node-1",
+      client,
+      execApprovalManager: manager(makeRecord("echo SAFE")),
+      nowMs: now,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("unreachable");
+    }
+    expect(result.message).toContain("approval id does not match request");
+    expect(result.details?.code).toBe("APPROVAL_REQUEST_MISMATCH");
+  });
+
+  test("binds env + timeout + screen recording fields to approval record", () => {
+    const record = makeRecord("echo SAFE");
+    record.request.env = {
+      FOO: "bar",
+      GIT_CONFIG_GLOBAL: "/tmp/payload",
+    };
+    record.request.runTimeoutMs = 600_000;
+    record.request.needsScreenRecording = false;
+    const result = sanitizeSystemRunParamsForForwarding({
+      rawParams: {
+        command: ["echo", "SAFE"],
+        rawCommand: "echo SAFE",
+        env: {
+          GIT_CONFIG_GLOBAL: "/tmp/payload",
+          FOO: "bar",
+        },
+        timeoutMs: 600_000,
+        needsScreenRecording: false,
+        runId: "approval-1",
+        approved: true,
+        approvalDecision: "allow-once",
+      },
+      nodeId: "node-1",
+      client,
+      execApprovalManager: manager(record),
+      nowMs: now,
+    });
+    expectAllowOnceForwardingResult(result);
+  });
+
   test("consumes allow-once approvals and blocks same runId replay", async () => {
     const approvalManager = new ExecApprovalManager();
     const runId = "approval-replay-1";

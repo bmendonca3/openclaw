@@ -13,6 +13,36 @@ import {
 } from "../protocol/index.js";
 import type { GatewayRequestHandlers } from "./types.js";
 
+function normalizeApprovalRequestEnv(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const normalized: Record<string, string> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof rawValue !== "string") {
+      continue;
+    }
+    const key = rawKey.trim();
+    if (!key) {
+      continue;
+    }
+    normalized[key] = rawValue;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeApprovalRequestRunTimeoutMs(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  const timeoutMs = Math.floor(value);
+  return timeoutMs > 0 ? timeoutMs : null;
+}
+
+function normalizeApprovalRequestNeedsScreenRecording(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 export function createExecApprovalHandlers(
   manager: ExecApprovalManager,
   opts?: { forwarder?: ExecApprovalForwarder },
@@ -51,6 +81,9 @@ export function createExecApprovalHandlers(
         agentId?: string;
         resolvedPath?: string;
         sessionKey?: string;
+        env?: Record<string, string> | null;
+        runTimeoutMs?: number | null;
+        needsScreenRecording?: boolean | null;
         timeoutMs?: number;
         twoPhase?: boolean;
       };
@@ -86,6 +119,9 @@ export function createExecApprovalHandlers(
         agentId: p.agentId ?? null,
         resolvedPath: p.resolvedPath ?? null,
         sessionKey: p.sessionKey ?? null,
+        env: normalizeApprovalRequestEnv(p.env),
+        runTimeoutMs: normalizeApprovalRequestRunTimeoutMs(p.runTimeoutMs),
+        needsScreenRecording: normalizeApprovalRequestNeedsScreenRecording(p.needsScreenRecording),
       };
       const record = manager.create(request, timeoutMs, explicitId);
       record.requestedByConnId = client?.connId ?? null;
