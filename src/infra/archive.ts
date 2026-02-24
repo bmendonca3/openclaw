@@ -496,6 +496,7 @@ export async function extractArchive(params: {
 
   const label = kind === "zip" ? "extract zip" : "extract tar";
   if (kind === "tar") {
+    await assertDestinationDirReady(params.destDir);
     const strip = Math.max(0, Math.floor(params.stripComponents ?? 0));
     const limits = resolveExtractLimits(params.limits);
     let entryCount = 0;

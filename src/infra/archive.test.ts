@@ -219,4 +219,38 @@ describe("archive utils", () => {
       ).rejects.toThrow(/absolute|drive path|escapes destination/i);
     });
   });
+
+  it("rejects tar extraction when destination root is a symlink", async () => {
+    await withArchiveCase("tar", async ({ workDir, archivePath, extractDir }) => {
+      await writePackageArchive({
+        ext: "tar",
+        workDir,
+        archivePath,
+        fileName: "hello.txt",
+        content: "hi",
+      });
+
+      const outsideDir = path.join(workDir, "outside");
+      await fs.mkdir(outsideDir, { recursive: true });
+      await fs.rm(extractDir, { recursive: true, force: true });
+      await fs.symlink(outsideDir, extractDir);
+
+      await expect(
+        extractArchive({
+          archivePath,
+          destDir: extractDir,
+          timeoutMs: 5_000,
+        }),
+      ).rejects.toMatchObject({
+        code: "destination-symlink",
+      } satisfies Partial<ArchiveSecurityError>);
+
+      const outsideFile = path.join(outsideDir, "package", "hello.txt");
+      const outsideExists = await fs
+        .stat(outsideFile)
+        .then(() => true)
+        .catch(() => false);
+      expect(outsideExists).toBe(false);
+    });
+  });
 });
