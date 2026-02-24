@@ -156,6 +156,16 @@ describe("createWebhookHandler", () => {
     });
   });
 
+  it("returns 403 when allowlist policy has no allowed users configured", async () => {
+    await expectForbiddenByPolicy({
+      account: {
+        dmPolicy: "allowlist",
+        allowedUserIds: [],
+      },
+      bodyContains: "not authorized",
+    });
+  });
+
   it("returns 403 when DMs are disabled", async () => {
     await expectForbiddenByPolicy({
       account: { dmPolicy: "disabled" },

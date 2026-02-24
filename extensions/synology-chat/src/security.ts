@@ -22,10 +22,10 @@ export function validateToken(received: string, expected: string): boolean {
 
 /**
  * Check if a user ID is in the allowed list.
- * Empty allowlist = allow all users.
+ * Empty allowlist = allow no users (fail closed).
  */
 export function checkUserAllowed(userId: string, allowedUserIds: string[]): boolean {
-  if (allowedUserIds.length === 0) return true;
+  if (allowedUserIds.length === 0) return false;
   return allowedUserIds.includes(userId);
 }
 
