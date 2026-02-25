@@ -231,7 +231,8 @@ async function processMessage(
     configuredAllowFrom: configAllowFrom,
     senderId,
     isSenderAllowed,
-    readAllowFromStore: pairing.readAllowFromStore,
+    readAllowFromStore: () =>
+      core.channel.pairing.readAllowFromStore("zalouser", undefined, account.accountId),
     shouldComputeCommandAuthorized: (body, cfg) =>
       core.channel.commands.shouldComputeCommandAuthorized(body, cfg),
     resolveCommandAuthorizedFromAuthorizers: (params) =>
@@ -251,6 +252,7 @@ async function processMessage(
         if (dmPolicy === "pairing") {
           const { code, created } = await pairing.upsertPairingRequest({
             id: senderId,
+            accountId: account.accountId,
             meta: { name: senderName || undefined },
           });
 
@@ -622,3 +624,22 @@ export async function monitorZalouserProvider(
 
   return { stop };
 }
+
+export const __testing = {
+  processMessage: async (params: {
+    message: ZcaMessage;
+    account: ResolvedZalouserAccount;
+    config: OpenClawConfig;
+    runtime: RuntimeEnv;
+    statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
+  }) => {
+    await processMessage(
+      params.message,
+      params.account,
+      params.config,
+      getZalouserRuntime(),
+      params.runtime,
+      params.statusSink,
+    );
+  },
+};
