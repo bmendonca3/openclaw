@@ -239,10 +239,59 @@ describe("handleFeishuMessage command authorization", () => {
 
     await dispatchMessage({ cfg, event });
 
-    expect(mockReadAllowFromStore).toHaveBeenCalledWith({
-      channel: "feishu",
-      accountId: "default",
+    expect(mockReadAllowFromStore).toHaveBeenCalledWith("feishu", undefined, "default");
+    expect(mockResolveCommandAuthorizedFromAuthorizers).not.toHaveBeenCalled();
+    expect(mockFinalizeInboundContext).toHaveBeenCalledTimes(1);
+    expect(mockDispatchReplyFromConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads pairing allow store with account-scoped key", async () => {
+    mockShouldComputeCommandAuthorized.mockReturnValue(false);
+    mockReadAllowFromStore.mockResolvedValue(["ou-attacker"]);
+
+    const cfg: ClawdbotConfig = {
+      commands: { useAccessGroups: true },
+      channels: {
+        feishu: {
+          accounts: {
+            work: {
+              dmPolicy: "pairing",
+              allowFrom: [],
+            },
+          },
+        },
+      },
+    } as ClawdbotConfig;
+
+    const event: FeishuMessageEvent = {
+      sender: {
+        sender_id: {
+          open_id: "ou-attacker",
+        },
+      },
+      message: {
+        message_id: "msg-read-store-account-scoped",
+        chat_id: "oc-dm",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text: "hello there" }),
+      },
+    };
+
+    await handleFeishuMessage({
+      cfg,
+      event,
+      accountId: "work",
+      runtime: {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn((code: number): never => {
+          throw new Error(`exit ${code}`);
+        }),
+      } as RuntimeEnv,
     });
+
+    expect(mockReadAllowFromStore).toHaveBeenCalledWith("feishu", undefined, "work");
     expect(mockResolveCommandAuthorizedFromAuthorizers).not.toHaveBeenCalled();
     expect(mockFinalizeInboundContext).toHaveBeenCalledTimes(1);
     expect(mockDispatchReplyFromConfig).toHaveBeenCalledTimes(1);
@@ -283,6 +332,7 @@ describe("handleFeishuMessage command authorization", () => {
       channel: "feishu",
       accountId: "default",
       id: "ou-unapproved",
+      accountId: "default",
       meta: { name: undefined },
     });
     expect(mockBuildPairingReply).toHaveBeenCalledWith({
@@ -294,6 +344,68 @@ describe("handleFeishuMessage command authorization", () => {
       expect.objectContaining({
         to: "user:ou-unapproved",
         accountId: "default",
+      }),
+    );
+    expect(mockFinalizeInboundContext).not.toHaveBeenCalled();
+    expect(mockDispatchReplyFromConfig).not.toHaveBeenCalled();
+  });
+
+  it("stores pairing requests with account-scoped key", async () => {
+    mockShouldComputeCommandAuthorized.mockReturnValue(false);
+    mockReadAllowFromStore.mockResolvedValue([]);
+    mockUpsertPairingRequest.mockResolvedValue({ code: "ABCDEFGH", created: true });
+
+    const cfg: ClawdbotConfig = {
+      channels: {
+        feishu: {
+          accounts: {
+            work: {
+              dmPolicy: "pairing",
+              allowFrom: [],
+            },
+          },
+        },
+      },
+    } as ClawdbotConfig;
+
+    const event: FeishuMessageEvent = {
+      sender: {
+        sender_id: {
+          open_id: "ou-unapproved",
+        },
+      },
+      message: {
+        message_id: "msg-pairing-flow-account-scoped",
+        chat_id: "oc-dm",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text: "hello" }),
+      },
+    };
+
+    await handleFeishuMessage({
+      cfg,
+      event,
+      accountId: "work",
+      runtime: {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn((code: number): never => {
+          throw new Error(`exit ${code}`);
+        }),
+      } as RuntimeEnv,
+    });
+
+    expect(mockUpsertPairingRequest).toHaveBeenCalledWith({
+      channel: "feishu",
+      id: "ou-unapproved",
+      accountId: "work",
+      meta: { name: undefined },
+    });
+    expect(mockSendMessageFeishu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "user:ou-unapproved",
+        accountId: "work",
       }),
     );
     expect(mockFinalizeInboundContext).not.toHaveBeenCalled();
