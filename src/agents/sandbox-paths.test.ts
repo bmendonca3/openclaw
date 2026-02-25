@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
-import { resolveSandboxedMediaSource } from "./sandbox-paths.js";
+import { assertSandboxPath, resolveSandboxedMediaSource } from "./sandbox-paths.js";
 
 async function withSandboxRoot<T>(run: (sandboxDir: string) => Promise<T>) {
   const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandbox-media-"));
@@ -276,5 +276,30 @@ describe("resolveSandboxedMediaSource", () => {
       sandboxRoot: "/any/path",
     });
     expect(result).toBe("");
+  });
+});
+
+describe("assertSandboxPath", () => {
+  it("rejects hardlinked sandbox paths to outside files", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    await withSandboxRoot(async (sandboxDir) => {
+      await withOutsideHardlinkInOpenClawTmp(
+        {
+          openClawTmpDir: sandboxDir,
+          hardlinkPrefix: "sandbox-path-hardlink",
+        },
+        async ({ hardlinkPath }) => {
+          await expect(
+            assertSandboxPath({
+              filePath: hardlinkPath,
+              cwd: sandboxDir,
+              root: sandboxDir,
+            }),
+          ).rejects.toThrow(/hard.?link|sandbox/i);
+        },
+      );
+    });
   });
 });

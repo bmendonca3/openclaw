@@ -61,8 +61,8 @@ export async function assertSandboxPath(params: {
   filePath: string;
   cwd: string;
   root: string;
-  allowFinalSymlinkForUnlink?: boolean;
-  allowFinalHardlinkForUnlink?: boolean;
+  allowFinalSymlink?: boolean;
+  allowFinalHardlink?: boolean;
 }) {
   const resolved = resolveSandboxPath(params);
   const policy: PathAliasPolicy = {
@@ -75,6 +75,11 @@ export async function assertSandboxPath(params: {
     boundaryLabel: "sandbox root",
     policy,
   });
+  if (!params.allowFinalHardlink) {
+    await assertNoHardlinkedFinalPath(resolved.resolved, path.resolve(params.root), {
+      rootLabel: "sandbox root",
+    });
+  }
   return resolved;
 }
 
@@ -202,11 +207,80 @@ async function assertNoTmpAliasEscape(params: {
   filePath: string;
   tmpRoot: string;
 }): Promise<void> {
-  await assertNoPathAliasEscape({
-    absolutePath: params.filePath,
-    rootPath: params.tmpRoot,
-    boundaryLabel: "tmp root",
-  });
+  await assertNoSymlinkEscape(path.relative(params.tmpRoot, params.filePath), params.tmpRoot);
+  await assertNoHardlinkedFinalPath(params.filePath, params.tmpRoot, { rootLabel: "tmp root" });
+}
+
+async function assertNoHardlinkedFinalPath(
+  filePath: string,
+  root: string,
+  options: { rootLabel: string },
+): Promise<void> {
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(filePath);
+  } catch (err) {
+    if (isNotFoundPathError(err)) {
+      return;
+    }
+    throw err;
+  }
+  if (!stat.isFile()) {
+    return;
+  }
+  if (stat.nlink > 1) {
+    throw new Error(
+      `Hardlinked media path is not allowed under ${options.rootLabel} (${shortPath(root)}): ${shortPath(filePath)}`,
+    );
+  }
+}
+
+async function assertNoSymlinkEscape(
+  relative: string,
+  root: string,
+  options?: { allowFinalSymlink?: boolean },
+) {
+  if (!relative) {
+    return;
+  }
+  const rootReal = await tryRealpath(root);
+  const parts = relative.split(path.sep).filter(Boolean);
+  let current = root;
+  for (let idx = 0; idx < parts.length; idx += 1) {
+    const part = parts[idx];
+    const isLast = idx === parts.length - 1;
+    current = path.join(current, part);
+    try {
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink()) {
+        // Unlinking a symlink itself is safe even if it points outside the root. What we
+        // must prevent is traversing through a symlink to reach targets outside root.
+        if (options?.allowFinalSymlink && isLast) {
+          return;
+        }
+        const target = await tryRealpath(current);
+        if (!isPathInside(rootReal, target)) {
+          throw new Error(
+            `Symlink escapes sandbox root (${shortPath(rootReal)}): ${shortPath(current)}`,
+          );
+        }
+        current = target;
+      }
+    } catch (err) {
+      if (isNotFoundPathError(err)) {
+        return;
+      }
+      throw err;
+    }
+  }
+}
+
+async function tryRealpath(value: string): Promise<string> {
+  try {
+    return await fs.realpath(value);
+  } catch {
+    return path.resolve(value);
+  }
 }
 
 function shortPath(value: string) {
