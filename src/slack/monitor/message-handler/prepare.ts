@@ -161,6 +161,55 @@ export async function prepareSlackMessage(params: {
     if (!allowed) {
       return null;
     }
+    if (ctx.dmPolicy !== "open") {
+      const allowMatch = resolveSlackAllowListMatch({
+        allowList: allowFromLower,
+        id: directUserId,
+        allowNameMatching: ctx.allowNameMatching,
+      });
+      const allowMatchMeta = formatAllowlistMatchMeta(allowMatch);
+      if (!allowMatch.allowed) {
+        if (ctx.dmPolicy === "pairing") {
+          const sender = await ctx.resolveUserName(directUserId);
+          const senderName = sender?.name ?? undefined;
+          const { code, created } = await upsertChannelPairingRequest({
+            channel: "slack",
+            id: directUserId,
+            accountId: account.accountId,
+            meta: { name: senderName },
+          });
+          if (created) {
+            logVerbose(
+              `slack pairing request sender=${directUserId} name=${
+                senderName ?? "unknown"
+              } (${allowMatchMeta})`,
+            );
+            try {
+              await sendMessageSlack(
+                message.channel,
+                buildPairingReply({
+                  channel: "slack",
+                  idLine: `Your Slack user id: ${directUserId}`,
+                  code,
+                }),
+                {
+                  token: ctx.botToken,
+                  client: ctx.app.client,
+                  accountId: account.accountId,
+                },
+              );
+            } catch (err) {
+              logVerbose(`slack pairing reply failed for ${message.user}: ${String(err)}`);
+            }
+          }
+        } else {
+          logVerbose(
+            `Blocked unauthorized slack sender ${message.user} (dmPolicy=${ctx.dmPolicy}, ${allowMatchMeta})`,
+          );
+        }
+        return null;
+      }
+    }
   }
 
   const route = resolveAgentRoute({
