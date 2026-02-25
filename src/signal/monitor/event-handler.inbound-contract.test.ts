@@ -151,10 +151,8 @@ describe("signal createSignalEventHandler inbound contract", () => {
     vi.mocked(readChannelAllowFromStore).mockResolvedValue(["+15550001111"]);
     const handler = createSignalEventHandler(
       createBaseSignalEventHandlerDeps({
-        cfg: {
-          messages: { inbound: { debounceMs: 0 } },
-          channels: { signal: { groups: { "*": { requireMention: false } } } },
-        },
+        // oxlint-disable-next-line typescript/no-explicit-any
+        cfg: { messages: { inbound: { debounceMs: 0 } } } as any,
         dmPolicy: "pairing",
         allowFrom: [],
         groupPolicy: "allowlist",
