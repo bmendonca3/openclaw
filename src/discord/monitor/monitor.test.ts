@@ -147,6 +147,14 @@ describe("agent components", () => {
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]?.[0]?.content).toContain("Pairing code: PAIRCODE");
     expect(enqueueSystemEventMock).not.toHaveBeenCalled();
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", undefined, "default");
+    expect(upsertPairingRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "discord",
+        id: "123456789",
+        accountId: "default",
+      }),
+    );
   });
 
   it("blocks DM interactions when only pairing store entries match in allowlist mode", async () => {
