@@ -8,6 +8,10 @@ import {
   verifyDeviceSignature,
 } from "../../../infra/device-identity.js";
 import {
+  consumeDevicePairingBootstrapToken,
+  verifyDevicePairingBootstrapToken,
+} from "../../../infra/device-pairing-bootstrap.js";
+import {
   approveDevicePairing,
   ensureDeviceToken,
   getPairedDevice,
@@ -78,7 +82,6 @@ import {
   resolveControlUiAuthPolicy,
   shouldSkipControlUiPairing,
 } from "./connect-policy.js";
-import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-flood-guard.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
 
@@ -191,7 +194,6 @@ export function attachGatewayWsMessageHandler(params: {
   }
 
   const isWebchatConnect = (p: ConnectParams | null | undefined) => isWebchatClient(p?.client);
-  const unauthorizedFloodGuard = new UnauthorizedFloodGuard();
 
   socket.on("message", async (data) => {
     if (isClosed()) {
@@ -334,8 +336,6 @@ export function attachGatewayWsMessageHandler(params: {
             requestHost,
             origin: requestOrigin,
             allowedOrigins: configSnapshot.gateway?.controlUi?.allowedOrigins,
-            allowHostHeaderOriginFallback:
-              configSnapshot.gateway?.controlUi?.dangerouslyAllowHostHeaderOriginFallback === true,
           });
           if (!originCheck.ok) {
             const errorMessage =
@@ -355,6 +355,8 @@ export function attachGatewayWsMessageHandler(params: {
         let devicePublicKey: string | null = null;
         const hasTokenAuth = Boolean(connectParams.auth?.token);
         const hasPasswordAuth = Boolean(connectParams.auth?.password);
+        const providedSharedToken = connectParams.auth?.token?.trim() ?? "";
+        let usedBootstrapToken = false;
         const hasSharedAuth = hasTokenAuth || hasPasswordAuth;
         const controlUiAuthPolicy = resolveControlUiAuthPolicy({
           isControlUi,
@@ -427,17 +429,11 @@ export function attachGatewayWsMessageHandler(params: {
           if (!device) {
             clearUnboundScopes();
           }
-          const trustedProxyAuthOk =
-            isControlUi &&
-            resolvedAuth.mode === "trusted-proxy" &&
-            authOk &&
-            authMethod === "trusted-proxy";
           const decision = evaluateMissingDeviceIdentity({
             hasDeviceIdentity: Boolean(device),
             role,
             isControlUi,
             controlUiAuthPolicy,
-            trustedProxyAuthOk,
             sharedAuthOk,
             authOk,
             hasSharedAuth,
@@ -542,6 +538,26 @@ export function attachGatewayWsMessageHandler(params: {
           }
         }
 
+        const canTryBootstrapToken =
+          !authOk &&
+          !authResult.rateLimited &&
+          role === "operator" &&
+          Boolean(device) &&
+          !connectParams.auth?.password &&
+          providedSharedToken.length > 0;
+        if (canTryBootstrapToken && device) {
+          const bootstrapAuth = await verifyDevicePairingBootstrapToken({
+            token: providedSharedToken,
+            deviceId: device.id,
+          });
+          if (bootstrapAuth.ok) {
+            authOk = true;
+            authMethod = "bootstrap-token";
+            authResult = { ok: true, method: "bootstrap-token" };
+            usedBootstrapToken = true;
+          }
+        }
+
         ({ authResult, authOk, authMethod } = await resolveConnectAuthDecision({
           state: {
             authResult,
@@ -569,13 +585,8 @@ export function attachGatewayWsMessageHandler(params: {
         // In that case, don't force device pairing on first connect.
         const skipPairingForOperatorSharedAuth =
           role === "operator" && sharedAuthOk && !isControlUi && !isWebchat;
-        const trustedProxyAuthOk =
-          isControlUi &&
-          resolvedAuth.mode === "trusted-proxy" &&
-          authOk &&
-          authMethod === "trusted-proxy";
         const skipPairing =
-          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk, trustedProxyAuthOk) ||
+          shouldSkipControlUiPairing(controlUiAuthPolicy, sharedAuthOk) ||
           skipPairingForOperatorSharedAuth;
         if (device && devicePublicKey && !skipPairing) {
           const formatAuditList = (items: string[] | undefined): string => {
@@ -730,6 +741,21 @@ export function attachGatewayWsMessageHandler(params: {
         const deviceToken = device
           ? await ensureDeviceToken({ deviceId: device.id, role, scopes })
           : null;
+        if (usedBootstrapToken && device && deviceToken) {
+          const consumed = await consumeDevicePairingBootstrapToken({
+            token: providedSharedToken,
+            deviceId: device.id,
+          });
+          if (!consumed) {
+            markHandshakeFailure("bootstrap-token-invalidated", { deviceId: device.id });
+            sendHandshakeErrorResponse(
+              ErrorCodes.INVALID_REQUEST,
+              "pairing setup token expired or already used",
+            );
+            close(1008, "pairing setup token invalid");
+            return;
+          }
+        }
 
         if (role === "node") {
           const cfg = loadConfig();
@@ -923,33 +949,6 @@ export function attachGatewayWsMessageHandler(params: {
         meta?: Record<string, unknown>,
       ) => {
         send({ type: "res", id: req.id, ok, payload, error });
-        const unauthorizedRoleError = isUnauthorizedRoleError(error);
-        let logMeta = meta;
-        if (unauthorizedRoleError) {
-          const unauthorizedDecision = unauthorizedFloodGuard.registerUnauthorized();
-          if (unauthorizedDecision.suppressedSinceLastLog > 0) {
-            logMeta = {
-              ...logMeta,
-              suppressedUnauthorizedResponses: unauthorizedDecision.suppressedSinceLastLog,
-            };
-          }
-          if (!unauthorizedDecision.shouldLog) {
-            return;
-          }
-          if (unauthorizedDecision.shouldClose) {
-            setCloseCause("repeated-unauthorized-requests", {
-              unauthorizedCount: unauthorizedDecision.count,
-              method: req.method,
-            });
-            queueMicrotask(() => close(1008, "repeated unauthorized calls"));
-          }
-          logMeta = {
-            ...logMeta,
-            unauthorizedCount: unauthorizedDecision.count,
-          };
-        } else {
-          unauthorizedFloodGuard.reset();
-        }
         logWs("out", "res", {
           connId,
           id: req.id,
@@ -957,7 +956,7 @@ export function attachGatewayWsMessageHandler(params: {
           method: req.method,
           errorCode: error?.code,
           errorMessage: error?.message,
-          ...logMeta,
+          ...meta,
         });
       };
 

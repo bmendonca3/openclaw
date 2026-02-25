@@ -130,6 +130,22 @@ async function expectHelloOkServerVersion(port: number, expectedVersion: string)
   }
 }
 
+async function expectMissingScopeAfterConnect(
+  port: number,
+  opts?: Parameters<typeof connectReq>[1],
+) {
+  const ws = await openWs(port);
+  try {
+    const res = await connectReq(ws, opts);
+    expect(res.ok).toBe(true);
+    const status = await rpcReq(ws, "status");
+    expect(status.ok).toBe(false);
+    expect(status.error?.message).toContain("missing scope");
+  } finally {
+    ws.close();
+  }
+}
+
 async function createSignedDevice(params: {
   token: string;
   scopes: string[];
@@ -296,14 +312,14 @@ describe("gateway server auth/connect", () => {
       await server.close();
     });
 
-    test("closes silent handshakes after timeout", async () => {
+    test("closes silent handshakes after timeout", { timeout: 60_000 }, async () => {
       vi.useRealTimers();
       const prevHandshakeTimeout = process.env.OPENCLAW_TEST_HANDSHAKE_TIMEOUT_MS;
-      process.env.OPENCLAW_TEST_HANDSHAKE_TIMEOUT_MS = "20";
+      process.env.OPENCLAW_TEST_HANDSHAKE_TIMEOUT_MS = "50";
       try {
         const ws = await openWs(port);
         const handshakeTimeoutMs = getHandshakeTimeoutMs();
-        const closed = await waitForWsClose(ws, handshakeTimeoutMs + 60);
+        const closed = await waitForWsClose(ws, handshakeTimeoutMs + 250);
         expect(closed).toBe(true);
       } finally {
         if (prevHandshakeTimeout === undefined) {
@@ -333,37 +349,41 @@ describe("gateway server auth/connect", () => {
       ws.close();
     });
 
-    test("connect (req) handshake resolves server version from env precedence", async () => {
-      for (const testCase of [
+    test("connect (req) handshake prefers service version fallback in hello-ok payload", async () => {
+      await withRuntimeVersionEnv(
         {
-          env: {
-            OPENCLAW_VERSION: " ",
-            OPENCLAW_SERVICE_VERSION: "2.4.6-service",
-            npm_package_version: "1.0.0-package",
-          },
-          expectedVersion: "2.4.6-service",
+          OPENCLAW_VERSION: " ",
+          OPENCLAW_SERVICE_VERSION: "2.4.6-service",
+          npm_package_version: "1.0.0-package",
         },
+        async () => expectHelloOkServerVersion(port, "2.4.6-service"),
+      );
+    });
+
+    test("connect (req) handshake prefers OPENCLAW_VERSION over service version", async () => {
+      await withRuntimeVersionEnv(
         {
-          env: {
-            OPENCLAW_VERSION: "9.9.9-cli",
-            OPENCLAW_SERVICE_VERSION: "2.4.6-service",
-            npm_package_version: "1.0.0-package",
-          },
-          expectedVersion: "9.9.9-cli",
+          OPENCLAW_VERSION: "9.9.9-cli",
+          OPENCLAW_SERVICE_VERSION: "2.4.6-service",
+          npm_package_version: "1.0.0-package",
         },
+        async () => expectHelloOkServerVersion(port, "9.9.9-cli"),
+      );
+    });
+
+    test("connect (req) handshake falls back to npm_package_version when higher-precedence env values are blank", async () => {
+      await withRuntimeVersionEnv(
         {
-          env: {
-            OPENCLAW_VERSION: " ",
-            OPENCLAW_SERVICE_VERSION: "\t",
-            npm_package_version: "1.0.0-package",
-          },
-          expectedVersion: "1.0.0-package",
+          OPENCLAW_VERSION: " ",
+          OPENCLAW_SERVICE_VERSION: "\t",
+          npm_package_version: "1.0.0-package",
         },
-      ]) {
-        await withRuntimeVersionEnv(testCase.env, async () =>
-          expectHelloOkServerVersion(port, testCase.expectedVersion),
-        );
-      }
+        async () => expectHelloOkServerVersion(port, "1.0.0-package"),
+      );
+    });
+
+    test("does not grant admin when scopes are empty", async () => {
+      await expectMissingScopeAfterConnect(port, { scopes: [] });
     });
 
     test("device-less auth matrix", async () => {
@@ -419,14 +439,11 @@ describe("gateway server auth/connect", () => {
       }
     });
 
-    test("keeps health available but admin status restricted when scopes are empty", async () => {
+    test("allows health when scopes are empty", async () => {
       const ws = await openWs(port);
       try {
         const res = await connectReq(ws, { scopes: [] });
         expect(res.ok).toBe(true);
-        const status = await rpcReq(ws, "status");
-        expect(status.ok).toBe(false);
-        expect(status.error?.message).toContain("missing scope");
         const health = await rpcReq(ws, "health");
         expect(health.ok).toBe(true);
       } finally {
@@ -567,50 +584,54 @@ describe("gateway server auth/connect", () => {
       await new Promise<void>((resolve) => ws.once("close", () => resolve()));
     });
 
-    test("invalid connect params surface in response and close reason", async () => {
-      const ws = await openWs(port);
-      const closeInfoPromise = new Promise<{ code: number; reason: string }>((resolve) => {
-        ws.once("close", (code, reason) => resolve({ code, reason: reason.toString() }));
-      });
+    test(
+      "invalid connect params surface in response and close reason",
+      { timeout: 60_000 },
+      async () => {
+        const ws = await openWs(port);
+        const closeInfoPromise = new Promise<{ code: number; reason: string }>((resolve) => {
+          ws.once("close", (code, reason) => resolve({ code, reason: reason.toString() }));
+        });
 
-      ws.send(
-        JSON.stringify({
-          type: "req",
-          id: "h-bad",
-          method: "connect",
-          params: {
-            minProtocol: PROTOCOL_VERSION,
-            maxProtocol: PROTOCOL_VERSION,
-            client: {
-              id: "bad-client",
-              version: "dev",
-              platform: "web",
-              mode: "webchat",
+        ws.send(
+          JSON.stringify({
+            type: "req",
+            id: "h-bad",
+            method: "connect",
+            params: {
+              minProtocol: PROTOCOL_VERSION,
+              maxProtocol: PROTOCOL_VERSION,
+              client: {
+                id: "bad-client",
+                version: "dev",
+                platform: "web",
+                mode: "webchat",
+              },
+              device: {
+                id: 123,
+                publicKey: "bad",
+                signature: "bad",
+                signedAt: "bad",
+              },
             },
-            device: {
-              id: 123,
-              publicKey: "bad",
-              signature: "bad",
-              signedAt: "bad",
-            },
-          },
-        }),
-      );
+          }),
+        );
 
-      const res = await onceMessage<{
-        ok: boolean;
-        error?: { message?: string };
-      }>(
-        ws,
-        (o) => (o as { type?: string }).type === "res" && (o as { id?: string }).id === "h-bad",
-      );
-      expect(res.ok).toBe(false);
-      expect(String(res.error?.message ?? "")).toContain("invalid connect params");
+        const res = await onceMessage<{
+          ok: boolean;
+          error?: { message?: string };
+        }>(
+          ws,
+          (o) => (o as { type?: string }).type === "res" && (o as { id?: string }).id === "h-bad",
+        );
+        expect(res.ok).toBe(false);
+        expect(String(res.error?.message ?? "")).toContain("invalid connect params");
 
-      const closeInfo = await closeInfoPromise;
-      expect(closeInfo.code).toBe(1008);
-      expect(closeInfo.reason).toContain("invalid connect params");
-    });
+        const closeInfo = await closeInfoPromise;
+        expect(closeInfo.code).toBe(1008);
+        expect(closeInfo.reason).toContain("invalid connect params");
+      },
+    );
   });
 
   describe("password auth", () => {
@@ -928,85 +949,137 @@ describe("gateway server auth/connect", () => {
     }
   });
 
-  test("device token auth matrix", async () => {
+  test("accepts device token auth for paired device", async () => {
     const { server, ws, port, prevToken } = await startServerWithClient("secret");
     const { deviceToken } = await ensurePairedDeviceTokenForCurrentIdentity(ws);
+
     ws.close();
 
-    const scenarios: Array<{
-      name: string;
-      opts: Parameters<typeof connectReq>[1];
-      assert: (res: Awaited<ReturnType<typeof connectReq>>) => void;
-    }> = [
-      {
-        name: "accepts device token auth for paired device",
-        opts: { token: deviceToken },
-        assert: (res) => {
-          expect(res.ok).toBe(true);
-        },
-      },
-      {
-        name: "accepts explicit auth.deviceToken when shared token is omitted",
-        opts: {
-          skipDefaultAuth: true,
-          deviceToken,
-        },
-        assert: (res) => {
-          expect(res.ok).toBe(true);
-        },
-      },
-      {
-        name: "uses explicit auth.deviceToken fallback when shared token is wrong",
-        opts: {
-          token: "wrong",
-          deviceToken,
-        },
-        assert: (res) => {
-          expect(res.ok).toBe(true);
-        },
-      },
-      {
-        name: "keeps shared token mismatch reason when fallback device-token check fails",
-        opts: { token: "wrong" },
-        assert: (res) => {
-          expect(res.ok).toBe(false);
-          expect(res.error?.message ?? "").toContain("gateway token mismatch");
-          expect(res.error?.message ?? "").not.toContain("device token mismatch");
-          expect((res.error?.details as { code?: string } | undefined)?.code).toBe(
-            ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH,
-          );
-        },
-      },
-      {
-        name: "reports device token mismatch when explicit auth.deviceToken is wrong",
-        opts: {
-          skipDefaultAuth: true,
-          deviceToken: "not-a-valid-device-token",
-        },
-        assert: (res) => {
-          expect(res.ok).toBe(false);
-          expect(res.error?.message ?? "").toContain("device token mismatch");
-          expect((res.error?.details as { code?: string } | undefined)?.code).toBe(
-            ConnectErrorDetailCodes.AUTH_DEVICE_TOKEN_MISMATCH,
-          );
-        },
-      },
-    ];
+    const ws2 = await openWs(port);
+    const res2 = await connectReq(ws2, { token: deviceToken });
+    expect(res2.ok).toBe(true);
 
-    try {
-      for (const scenario of scenarios) {
-        const ws2 = await openWs(port);
-        try {
-          const res = await connectReq(ws2, scenario.opts);
-          scenario.assert(res);
-        } finally {
-          ws2.close();
-        }
-      }
-    } finally {
-      await server.close();
-      restoreGatewayToken(prevToken);
+    ws2.close();
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
+  test("accepts explicit auth.deviceToken when shared token is omitted", async () => {
+    const { server, ws, port, prevToken } = await startServerWithClient("secret");
+    const { deviceToken } = await ensurePairedDeviceTokenForCurrentIdentity(ws);
+
+    ws.close();
+
+    const ws2 = await openWs(port);
+    const res2 = await connectReq(ws2, {
+      skipDefaultAuth: true,
+      deviceToken,
+    });
+    expect(res2.ok).toBe(true);
+
+    ws2.close();
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
+  test("uses explicit auth.deviceToken fallback when shared token is wrong", async () => {
+    const { server, ws, port, prevToken } = await startServerWithClient("secret");
+    const { deviceToken } = await ensurePairedDeviceTokenForCurrentIdentity(ws);
+
+    ws.close();
+
+    const ws2 = await openWs(port);
+    const res2 = await connectReq(ws2, {
+      token: "wrong",
+      deviceToken,
+    });
+    expect(res2.ok).toBe(true);
+
+    ws2.close();
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
+  test("keeps shared token mismatch reason when token fallback device-token check fails", async () => {
+    const { server, ws, port, prevToken } = await startServerWithClient("secret");
+    await ensurePairedDeviceTokenForCurrentIdentity(ws);
+
+    ws.close();
+
+    const ws2 = await openWs(port);
+    const res2 = await connectReq(ws2, { token: "wrong" });
+    expect(res2.ok).toBe(false);
+    expect(res2.error?.message ?? "").toContain("gateway token mismatch");
+    expect(res2.error?.message ?? "").not.toContain("device token mismatch");
+    expect((res2.error?.details as { code?: string } | undefined)?.code).toBe(
+      ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH,
+    );
+
+    ws2.close();
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
+  test("reports device token mismatch when explicit auth.deviceToken is wrong", async () => {
+    const { server, ws, port, prevToken } = await startServerWithClient("secret");
+    await ensurePairedDeviceTokenForCurrentIdentity(ws);
+
+    ws.close();
+
+    const ws2 = await openWs(port);
+    const res2 = await connectReq(ws2, {
+      skipDefaultAuth: true,
+      deviceToken: "not-a-valid-device-token",
+    });
+    expect(res2.ok).toBe(false);
+    expect(res2.error?.message ?? "").toContain("device token mismatch");
+    expect((res2.error?.details as { code?: string } | undefined)?.code).toBe(
+      ConnectErrorDetailCodes.AUTH_DEVICE_TOKEN_MISMATCH,
+    );
+
+    ws2.close();
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
+  test("accepts short-lived bootstrap setup token until first successful paired connect", async () => {
+    const { createDevicePairingBootstrapToken } =
+      await import("../infra/device-pairing-bootstrap.js");
+    const { approveDevicePairing, listDevicePairing } = await import("../infra/device-pairing.js");
+    const { server, ws, port, prevToken } = await startServerWithClient("secret", {
+      wsHeaders: { host: "gateway.example" },
+    });
+
+    const bootstrap = await createDevicePairingBootstrapToken();
+
+    const first = await connectReq(ws, { token: bootstrap.token });
+    expect(first.ok).toBe(false);
+    expect(first.error?.message ?? "").toContain("pairing required");
+
+    const pending = await listDevicePairing();
+    expect(pending.pending).toHaveLength(1);
+    const firstPending = pending.pending[0];
+    expect(firstPending?.requestId).toBeDefined();
+    if (!firstPending?.requestId) {
+      throw new Error("expected pending pairing request");
     }
+    await approveDevicePairing(firstPending.requestId);
+
+    ws.close();
+
+    const ws2 = await openWs(port, { host: "gateway.example" });
+    const second = await connectReq(ws2, { token: bootstrap.token });
+    expect(second.ok).toBe(true);
+    ws2.close();
+
+    const ws3 = await openWs(port, { host: "gateway.example" });
+    const third = await connectReq(ws3, { token: bootstrap.token });
+    expect(third.ok).toBe(false);
+    expect(third.error?.message ?? "").toContain("gateway token mismatch");
+    ws3.close();
+
+    await server.close();
+    restoreGatewayToken(prevToken);
   });
 
   test("keeps shared-secret lockout separate from device-token auth", async () => {

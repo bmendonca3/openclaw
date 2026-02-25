@@ -7,9 +7,16 @@ type RegisteredCommandHandler = RegisteredCommand["handler"];
 const resolveGatewayBindUrlMock = vi.hoisted(() =>
   vi.fn(() => ({ url: "ws://public.example:18789", source: "gateway.bind=lan" })),
 );
+const createDevicePairingBootstrapTokenMock = vi.hoisted(() =>
+  vi.fn(async () => ({
+    token: "bootstrap-setup-token",
+    expiresAtMs: Date.now() + 60_000,
+  })),
+);
 
 vi.mock("openclaw/plugin-sdk", () => ({
   approveDevicePairing: vi.fn(),
+  createDevicePairingBootstrapToken: createDevicePairingBootstrapTokenMock,
   listDevicePairing: vi.fn(async () => ({ pending: [] })),
   resolveGatewayBindUrl: resolveGatewayBindUrlMock,
   runPluginCommandWithTimeout: vi.fn(),
@@ -73,10 +80,11 @@ describe("device-pair setup code", () => {
 
   afterEach(() => {
     process.env.OPENCLAW_GATEWAY_TOKEN = originalToken;
+    createDevicePairingBootstrapTokenMock.mockClear();
     resolveGatewayBindUrlMock.mockClear();
   });
 
-  it("does not embed gateway credentials in generated setup code", async () => {
+  it("embeds a one-time bootstrap token instead of gateway credentials", async () => {
     process.env.OPENCLAW_GATEWAY_TOKEN = "super-secret-token";
 
     const pairCommandHandler = registerPairCommand({
@@ -95,6 +103,7 @@ describe("device-pair setup code", () => {
       to: "discord:user-1",
     });
 
+    expect(createDevicePairingBootstrapTokenMock).toHaveBeenCalledTimes(1);
     expect(resolveGatewayBindUrlMock).toHaveBeenCalled();
     expect(typeof result.text).toBe("string");
     const reply = result.text ?? "";
@@ -105,8 +114,11 @@ describe("device-pair setup code", () => {
     expect(setupCode).not.toHaveLength(0);
 
     const payload = decodeSetupCode(setupCode);
-    expect(payload).toEqual({ url: "ws://public.example:18789" });
-    expect(payload).not.toHaveProperty("token");
+    expect(payload).toEqual({
+      url: "ws://public.example:18789",
+      token: "bootstrap-setup-token",
+    });
     expect(payload).not.toHaveProperty("password");
+    expect(payload.token).not.toBe("super-secret-token");
   });
 });
