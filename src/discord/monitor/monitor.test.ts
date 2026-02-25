@@ -146,6 +146,16 @@ describe("agent components", () => {
     expect(defer).toHaveBeenCalledWith({ ephemeral: true });
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]?.[0]?.content).toContain("Pairing code: PAIRCODE");
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", process.env, "default");
+    expect(upsertPairingRequestMock).toHaveBeenCalledWith({
+      channel: "discord",
+      id: "123456789",
+      accountId: "default",
+      meta: {
+        tag: "Alice#1234",
+        name: "Alice",
+      },
+    });
     expect(enqueueSystemEventMock).not.toHaveBeenCalled();
   });
 
