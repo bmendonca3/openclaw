@@ -607,6 +607,11 @@ describe("handleCommands /allowlist", () => {
     expect(result.reply?.text).toContain("Channel: telegram");
     expect(result.reply?.text).toContain("DM allowFrom (config): 123, @alice");
     expect(result.reply?.text).toContain("Paired allowFrom (store): 456");
+    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith(
+      "telegram",
+      expect.any(Object),
+      "default",
+    );
   });
 
   it("adds entries to config and pairing store", async () => {
@@ -641,8 +646,32 @@ describe("handleCommands /allowlist", () => {
     expect(addChannelAllowFromStoreEntryMock).toHaveBeenCalledWith({
       channel: "telegram",
       entry: "789",
+      accountId: "default",
     });
     expect(result.reply?.text).toContain("DM allowlist added");
+  });
+
+  it("scopes pairing-store mutations to the resolved account", async () => {
+    addChannelAllowFromStoreEntryMock.mockResolvedValueOnce({
+      changed: true,
+      allowFrom: ["789"],
+    });
+
+    const cfg = {
+      commands: { text: true, config: true },
+      channels: { telegram: { allowFrom: [] } },
+    } as OpenClawConfig;
+    const params = buildPolicyParams("/allowlist add dm --store 789", cfg, {
+      AccountId: "acct-b",
+    });
+    const result = await handleCommands(params);
+
+    expect(result.shouldContinue).toBe(false);
+    expect(addChannelAllowFromStoreEntryMock).toHaveBeenCalledWith({
+      channel: "telegram",
+      entry: "789",
+      accountId: "acct-b",
+    });
   });
 
   it("rejects blocked account ids and keeps Object.prototype clean", async () => {
