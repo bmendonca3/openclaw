@@ -846,6 +846,29 @@ describe("slack slash commands access groups", () => {
 
     expectUnauthorizedResponse(respond);
   });
+
+  it("blocks channel slash commands for senders authorized only via DM pairing store", async () => {
+    const { readAllowFromStoreMock } = getSlackSlashMocks();
+    readAllowFromStoreMock.mockResolvedValueOnce(["U_ATTACKER"]);
+
+    const harness = createPolicyHarness({
+      allowFrom: ["U_OWNER"],
+      channelId: "C123",
+      channelName: "general",
+      resolveChannelName: async () => ({ name: "general", type: "channel" }),
+    });
+    const { respond } = await registerAndRunPolicySlash({
+      harness,
+      command: {
+        user_id: "U_ATTACKER",
+        user_name: "Mallory",
+        channel_id: "C123",
+        channel_name: "general",
+      },
+    });
+
+    expectUnauthorizedResponse(respond);
+  });
 });
 
 describe("slack slash command session metadata", () => {

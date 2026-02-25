@@ -326,12 +326,15 @@ export async function registerSlackMonitorSlashCommands(params: {
         return;
       }
 
-      const { allowFromLower: effectiveAllowFromLower } = await resolveSlackEffectiveAllowFrom(
-        ctx,
-        {
-          includePairingStore: isDirectMessage,
-        },
-      );
+      const storeAllowFrom =
+        ctx.dmPolicy === "allowlist"
+          ? []
+          : await readChannelAllowFromStore("slack").catch(() => []);
+      const effectiveAllowFrom = normalizeAllowList([...ctx.allowFrom, ...storeAllowFrom]);
+      const effectiveAllowFromLower = normalizeAllowListLower(effectiveAllowFrom);
+      const ownerAllowFromLower = isRoomish
+        ? normalizeAllowListLower(normalizeAllowList(ctx.allowFrom))
+        : effectiveAllowFromLower;
 
       // Privileged command surface: compute CommandAuthorized, don't assume true.
       // Keep this aligned with the Slack message path (message-handler/prepare.ts).
@@ -431,7 +434,7 @@ export async function registerSlackMonitorSlashCommands(params: {
       }
 
       const ownerAllowed = resolveSlackAllowListMatch({
-        allowList: effectiveAllowFromLower,
+        allowList: ownerAllowFromLower,
         id: command.user_id,
         name: senderName,
         allowNameMatching: ctx.allowNameMatching,
@@ -440,14 +443,14 @@ export async function registerSlackMonitorSlashCommands(params: {
       // CommandAuthorized based on allowlists/access-groups (downstream decides which commands need it).
       commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
         useAccessGroups: ctx.useAccessGroups,
-        authorizers: [{ configured: effectiveAllowFromLower.length > 0, allowed: ownerAllowed }],
+        authorizers: [{ configured: ownerAllowFromLower.length > 0, allowed: ownerAllowed }],
         modeWhenAccessGroupsOff: "configured",
       });
       if (isRoomish) {
         commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
           useAccessGroups: ctx.useAccessGroups,
           authorizers: [
-            { configured: effectiveAllowFromLower.length > 0, allowed: ownerAllowed },
+            { configured: ownerAllowFromLower.length > 0, allowed: ownerAllowed },
             { configured: channelUsersAllowlistConfigured, allowed: channelUserAllowed },
           ],
           modeWhenAccessGroupsOff: "configured",
