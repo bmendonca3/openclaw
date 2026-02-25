@@ -204,7 +204,9 @@ export class VoiceCallWebhookServer {
       if (this.mediaStreamHandler) {
         this.server.on("upgrade", (request, socket, head) => {
           const path = this.getUpgradePathname(request);
-          if (path === streamPath) {
+          const normalizedPath = normalizeWebhookPath(path ?? "");
+          const normalizedStreamPath = normalizeWebhookPath(streamPath);
+          if (normalizedPath === normalizedStreamPath) {
             console.log("[voice-call] WebSocket upgrade for media stream");
             this.mediaStreamHandler?.handleUpgrade(request, socket, head);
           } else {
