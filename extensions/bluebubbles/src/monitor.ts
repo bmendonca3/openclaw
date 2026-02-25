@@ -353,65 +353,7 @@ export async function handleBlueBubblesWebhookRequest(
     return true;
   }
 
-  const body = await readBlueBubblesWebhookBody(req, 1024 * 1024);
-  if (!body.ok) {
-    res.statusCode = body.statusCode;
-    res.end(body.error ?? "invalid payload");
-    console.warn(`[bluebubbles] webhook rejected: ${body.error ?? "invalid payload"}`);
-    return true;
-  }
-
-  const payload = asRecord(body.value) ?? {};
-  const firstTarget = targets[0];
-  if (firstTarget) {
-    logVerbose(
-      firstTarget.core,
-      firstTarget.runtime,
-      `webhook received path=${path} keys=${Object.keys(payload).join(",") || "none"}`,
-    );
-  }
-  const eventTypeRaw = payload.type;
-  const eventType = typeof eventTypeRaw === "string" ? eventTypeRaw.trim() : "";
-  const allowedEventTypes = new Set([
-    "new-message",
-    "updated-message",
-    "message-reaction",
-    "reaction",
-  ]);
-  if (eventType && !allowedEventTypes.has(eventType)) {
-    res.statusCode = 200;
-    res.end("ok");
-    if (firstTarget) {
-      logVerbose(firstTarget.core, firstTarget.runtime, `webhook ignored type=${eventType}`);
-    }
-    return true;
-  }
-  const reaction = normalizeWebhookReaction(payload);
-  if (
-    (eventType === "updated-message" ||
-      eventType === "message-reaction" ||
-      eventType === "reaction") &&
-    !reaction
-  ) {
-    res.statusCode = 200;
-    res.end("ok");
-    if (firstTarget) {
-      logVerbose(
-        firstTarget.core,
-        firstTarget.runtime,
-        `webhook ignored ${eventType || "event"} without reaction`,
-      );
-    }
-    return true;
-  }
-  const message = reaction ? null : normalizeWebhookMessage(payload);
-  if (!message && !reaction) {
-    res.statusCode = 400;
-    res.end("invalid payload");
-    console.warn("[bluebubbles] webhook rejected: unable to parse message payload");
-    return true;
-  }
-
+  // Authenticate before body parsing to avoid unauthenticated slow-body / parse work.
   const guidParam = url.searchParams.get("guid") ?? url.searchParams.get("password");
   const headerToken =
     req.headers["x-guid"] ??
@@ -441,6 +383,58 @@ export async function handleBlueBubblesWebhookRequest(
   }
 
   const target = matchedTarget.target;
+  const body = await readBlueBubblesWebhookBody(req, 1024 * 1024);
+  if (!body.ok) {
+    res.statusCode = body.statusCode;
+    res.end(body.error ?? "invalid payload");
+    console.warn(`[bluebubbles] webhook rejected: ${body.error ?? "invalid payload"}`);
+    return true;
+  }
+
+  const payload = asRecord(body.value) ?? {};
+  logVerbose(
+    target.core,
+    target.runtime,
+    `webhook received path=${path} keys=${Object.keys(payload).join(",") || "none"}`,
+  );
+  const eventTypeRaw = payload.type;
+  const eventType = typeof eventTypeRaw === "string" ? eventTypeRaw.trim() : "";
+  const allowedEventTypes = new Set([
+    "new-message",
+    "updated-message",
+    "message-reaction",
+    "reaction",
+  ]);
+  if (eventType && !allowedEventTypes.has(eventType)) {
+    res.statusCode = 200;
+    res.end("ok");
+    logVerbose(target.core, target.runtime, `webhook ignored type=${eventType}`);
+    return true;
+  }
+  const reaction = normalizeWebhookReaction(payload);
+  if (
+    (eventType === "updated-message" ||
+      eventType === "message-reaction" ||
+      eventType === "reaction") &&
+    !reaction
+  ) {
+    res.statusCode = 200;
+    res.end("ok");
+    logVerbose(
+      target.core,
+      target.runtime,
+      `webhook ignored ${eventType || "event"} without reaction`,
+    );
+    return true;
+  }
+  const message = reaction ? null : normalizeWebhookMessage(payload);
+  if (!message && !reaction) {
+    res.statusCode = 400;
+    res.end("invalid payload");
+    console.warn("[bluebubbles] webhook rejected: unable to parse message payload");
+    return true;
+  }
+
   target.statusSink?.({ lastInboundAt: Date.now() });
   if (reaction) {
     processReaction(reaction, target).catch((err) => {
@@ -462,21 +456,17 @@ export async function handleBlueBubblesWebhookRequest(
   res.statusCode = 200;
   res.end("ok");
   if (reaction) {
-    if (firstTarget) {
-      logVerbose(
-        firstTarget.core,
-        firstTarget.runtime,
-        `webhook accepted reaction sender=${reaction.senderId} msg=${reaction.messageId} action=${reaction.action}`,
-      );
-    }
+    logVerbose(
+      target.core,
+      target.runtime,
+      `webhook accepted reaction sender=${reaction.senderId} msg=${reaction.messageId} action=${reaction.action}`,
+    );
   } else if (message) {
-    if (firstTarget) {
-      logVerbose(
-        firstTarget.core,
-        firstTarget.runtime,
-        `webhook accepted sender=${message.senderId} group=${message.isGroup} chatGuid=${message.chatGuid ?? ""} chatId=${message.chatId ?? ""}`,
-      );
-    }
+    logVerbose(
+      target.core,
+      target.runtime,
+      `webhook accepted sender=${message.senderId} group=${message.isGroup} chatGuid=${message.chatGuid ?? ""} chatId=${message.chatId ?? ""}`,
+    );
   }
   return true;
 }

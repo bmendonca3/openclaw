@@ -517,8 +517,8 @@ describe("BlueBubbles webhook monitor", () => {
         // Create a request that never sends data or ends (simulates slow-loris)
         const req = new EventEmitter() as IncomingMessage;
         req.method = "POST";
-        req.url = "/bluebubbles-webhook";
-        req.headers = {};
+        req.url = "/bluebubbles-webhook?password=test-password";
+        req.headers = { host: "localhost" };
         (req as unknown as { socket: { remoteAddress: string } }).socket = {
           remoteAddress: "127.0.0.1",
         };
@@ -649,6 +649,46 @@ describe("BlueBubbles webhook monitor", () => {
 
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(401);
+    });
+
+    it("rejects unauthorized requests before reading request body", async () => {
+      const account = createMockAccount({ password: "secret-token" });
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      // Request never sends data/end; auth rejection should still be immediate.
+      const req = new EventEmitter() as IncomingMessage;
+      req.method = "POST";
+      req.url = "/bluebubbles-webhook?password=wrong-token";
+      req.headers = { host: "localhost" };
+      (req as unknown as { socket: { remoteAddress: string } }).socket = {
+        remoteAddress: "192.168.1.100",
+      };
+      req.destroy = vi.fn();
+
+      const res = createMockResponse();
+      const handledPromise = handleBlueBubblesWebhookRequest(req, res);
+      const timeoutSentinel = Symbol("timeout");
+      const raced = await Promise.race<true | typeof timeoutSentinel>([
+        handledPromise as Promise<true>,
+        new Promise<typeof timeoutSentinel>((resolve) =>
+          setTimeout(() => resolve(timeoutSentinel), 100),
+        ),
+      ]);
+
+      expect(raced).toBe(true);
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toBe("unauthorized");
+      expect(req.destroy).not.toHaveBeenCalled();
     });
 
     it("rejects ambiguous routing when multiple targets match the same password", async () => {
