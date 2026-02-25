@@ -29,6 +29,22 @@ import type { CoreConfig, GroupPolicy, NextcloudTalkInboundMessage } from "./typ
 
 const CHANNEL_ID = "nextcloud-talk" as const;
 
+function resolveNextcloudTalkEffectiveAllowlists(params: {
+  configAllowFrom: string[];
+  configGroupAllowFrom: string[];
+  storeAllowList: string[];
+}): {
+  effectiveAllowFrom: string[];
+  effectiveGroupAllowFrom: string[];
+} {
+  const baseGroupAllowFrom =
+    params.configGroupAllowFrom.length > 0 ? params.configGroupAllowFrom : params.configAllowFrom;
+  const effectiveAllowFrom = [...params.configAllowFrom, ...params.storeAllowList].filter(Boolean);
+  // Pairing-store entries come from DM approvals and must not widen group authorization.
+  const effectiveGroupAllowFrom = [...baseGroupAllowFrom].filter(Boolean);
+  return { effectiveAllowFrom, effectiveGroupAllowFrom };
+}
+
 async function deliverNextcloudTalkReply(params: {
   payload: OutboundReplyPayload;
   roomToken: string;
@@ -118,11 +134,11 @@ export async function handleNextcloudTalkInbound(params: {
   }
 
   const roomAllowFrom = normalizeNextcloudTalkAllowlist(roomConfig?.allowFrom);
-  const baseGroupAllowFrom =
-    configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
-
-  const effectiveAllowFrom = [...configAllowFrom, ...storeAllowList].filter(Boolean);
-  const effectiveGroupAllowFrom = [...baseGroupAllowFrom, ...storeAllowList].filter(Boolean);
+  const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveNextcloudTalkEffectiveAllowlists({
+    configAllowFrom,
+    configGroupAllowFrom,
+    storeAllowList,
+  });
 
   const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
     cfg: config as OpenClawConfig,
@@ -336,3 +352,7 @@ export async function handleNextcloudTalkInbound(params: {
     },
   });
 }
+
+export const __testing = {
+  resolveNextcloudTalkEffectiveAllowlists,
+};
