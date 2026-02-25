@@ -7,26 +7,31 @@ import {
   createSignalReceiveEvent,
 } from "./event-handler.test-harness.js";
 
-const { sendTypingMock, sendReadReceiptMock, dispatchInboundMessageMock, capture } = vi.hoisted(
-  () => {
-    const captureState: { ctx: MsgContext | undefined } = { ctx: undefined };
-    return {
-      sendTypingMock: vi.fn(),
-      sendReadReceiptMock: vi.fn(),
-      dispatchInboundMessageMock: vi.fn(
-        async (params: {
-          ctx: MsgContext;
-          replyOptions?: { onReplyStart?: () => void | Promise<void> };
-        }) => {
-          captureState.ctx = params.ctx;
-          await Promise.resolve(params.replyOptions?.onReplyStart?.());
-          return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
-        },
-      ),
-      capture: captureState,
-    };
-  },
-);
+const {
+  sendTypingMock,
+  sendReadReceiptMock,
+  dispatchInboundMessageMock,
+  readAllowFromStoreMock,
+  capture,
+} = vi.hoisted(() => {
+  const captureState: { ctx: MsgContext | undefined } = { ctx: undefined };
+  return {
+    sendTypingMock: vi.fn(),
+    sendReadReceiptMock: vi.fn(),
+    dispatchInboundMessageMock: vi.fn(
+      async (params: {
+        ctx: MsgContext;
+        replyOptions?: { onReplyStart?: () => void | Promise<void> };
+      }) => {
+        captureState.ctx = params.ctx;
+        await Promise.resolve(params.replyOptions?.onReplyStart?.());
+        return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
+      },
+    ),
+    readAllowFromStoreMock: vi.fn(),
+    capture: captureState,
+  };
+});
 
 vi.mock("../send.js", () => ({
   sendMessageSignal: vi.fn(),
@@ -45,7 +50,7 @@ vi.mock("../../auto-reply/dispatch.js", async (importOriginal) => {
 });
 
 vi.mock("../../pairing/pairing-store.js", () => ({
-  readChannelAllowFromStore: vi.fn().mockResolvedValue([]),
+  readChannelAllowFromStore: readAllowFromStoreMock,
   upsertChannelPairingRequest: vi.fn(),
 }));
 
@@ -55,6 +60,7 @@ describe("signal createSignalEventHandler inbound contract", () => {
     sendTypingMock.mockReset().mockResolvedValue(true);
     sendReadReceiptMock.mockReset().mockResolvedValue(true);
     dispatchInboundMessageMock.mockClear();
+    readAllowFromStoreMock.mockReset().mockResolvedValue([]);
   });
 
   it("passes a finalized MsgContext to dispatchInboundMessage", async () => {
@@ -144,32 +150,36 @@ describe("signal createSignalEventHandler inbound contract", () => {
     );
   });
 
-  it("does not auto-authorize DM commands in open mode without allowlists", async () => {
+  it("does not treat DM pairing-store entries as group allowlist authorization", async () => {
+    readAllowFromStoreMock.mockResolvedValue(["+15550001111"]);
     const handler = createSignalEventHandler(
       createBaseSignalEventHandlerDeps({
         cfg: {
           messages: { inbound: { debounceMs: 0 } },
-          channels: { signal: { dmPolicy: "open", allowFrom: [] } },
+          commands: { useAccessGroups: true },
         },
+        dmPolicy: "pairing",
         allowFrom: [],
         groupAllowFrom: [],
-        account: "+15550009999",
-        blockStreaming: false,
+        groupPolicy: "allowlist",
         historyLimit: 0,
-        groupHistories: new Map(),
       }),
     );
 
     await handler(
       createSignalReceiveEvent({
+        sourceNumber: "+15550001111",
+        sourceName: "Paired DM User",
+        timestamp: 1700000000100,
         dataMessage: {
-          message: "/status",
+          message: "hello from group",
           attachments: [],
+          groupInfo: { groupId: "g1", groupName: "Test Group" },
         },
       }),
     );
 
-    expect(capture.ctx).toBeTruthy();
-    expect(capture.ctx?.CommandAuthorized).toBe(false);
+    expect(dispatchInboundMessageMock).not.toHaveBeenCalled();
+    expect(capture.ctx).toBeUndefined();
   });
 });

@@ -486,6 +486,15 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
     const groupId = dataMessage.groupInfo?.groupId ?? undefined;
     const groupName = dataMessage.groupInfo?.groupName ?? undefined;
     const isGroup = Boolean(groupId);
+    // Pairing-store approvals are DM-scoped. Do not treat them as group allowlist entries.
+    const storeAllowFrom =
+      !isGroup && deps.dmPolicy !== "allowlist"
+        ? await readChannelAllowFromStore("signal").catch(() => [])
+        : [];
+    const effectiveDmAllow = [...deps.allowFrom, ...storeAllowFrom];
+    const effectiveGroupAllow = [...deps.groupAllowFrom];
+    const dmAllowed =
+      deps.dmPolicy === "open" ? true : isSignalSenderAllowed(sender, effectiveDmAllow);
 
     if (!isGroup) {
       const allowedDirectMessage = await handleSignalDirectMessageAccess({
