@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { OpenClawConfig, PluginRuntime } from "openclaw/plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
 import { handleZaloWebhookRequest, registerZaloWebhookTarget } from "./monitor.js";
+import type { ZaloRuntimeEnv } from "./monitor.js";
 import type { ResolvedZaloAccount } from "./types.js";
 
 async function withServer(handler: RequestListener, fn: (baseUrl: string) => Promise<void>) {
@@ -41,12 +42,13 @@ function registerTarget(params: {
   path: string;
   secret?: string;
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
+  runtime?: ZaloRuntimeEnv;
 }): () => void {
   return registerZaloWebhookTarget({
     token: "tok",
     account: DEFAULT_ACCOUNT,
     config: {} as OpenClawConfig,
-    runtime: {},
+    runtime: params.runtime ?? {},
     core: {} as PluginRuntime,
     secret: params.secret ?? "secret",
     path: params.path,
@@ -192,6 +194,35 @@ describe("handleZaloWebhookRequest", () => {
 
         expect(saw429).toBe(true);
       });
+    } finally {
+      unregister();
+    }
+  });
+
+  it("coalesces unauthorized anomaly counters by normalized path (query does not fan out keys)", async () => {
+    const log = vi.fn();
+    const unregister = registerTarget({
+      path: "/hook-anomaly",
+      runtime: { log },
+    });
+
+    try {
+      await withServer(webhookRequestHandler, async (baseUrl) => {
+        for (let i = 0; i < 50; i += 1) {
+          const response = await fetch(`${baseUrl}/hook-anomaly?nonce=${i}`, {
+            method: "POST",
+            headers: {
+              "x-bot-api-secret-token": "wrong-secret",
+              "content-type": "application/json",
+            },
+            body: "{}",
+          });
+          expect(response.status).toBe(401);
+        }
+      });
+
+      // Logs on first anomaly and every 25th occurrence for the same path: 1, 25, 50.
+      expect(log).toHaveBeenCalledTimes(3);
     } finally {
       unregister();
     }

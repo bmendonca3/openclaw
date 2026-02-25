@@ -127,7 +127,7 @@ export async function handleZaloWebhookRequest(
   if (!resolved) {
     return false;
   }
-  const { targets } = resolved;
+  const { path: requestPath, targets } = resolved;
 
   if (rejectNonPostWebhookRequest(req, res)) {
     return true;
@@ -140,31 +140,30 @@ export async function handleZaloWebhookRequest(
   if (matchedTarget.kind === "none") {
     res.statusCode = 401;
     res.end("unauthorized");
-    recordWebhookStatus(targets[0]?.runtime, req.url ?? "<unknown>", res.statusCode);
+    recordWebhookStatus(targets[0]?.runtime, requestPath, res.statusCode);
     return true;
   }
   if (matchedTarget.kind === "ambiguous") {
     res.statusCode = 401;
     res.end("ambiguous webhook target");
-    recordWebhookStatus(targets[0]?.runtime, req.url ?? "<unknown>", res.statusCode);
+    recordWebhookStatus(targets[0]?.runtime, requestPath, res.statusCode);
     return true;
   }
   const target = matchedTarget.target;
-  const path = req.url ?? "<unknown>";
-  const rateLimitKey = `${path}:${req.socket.remoteAddress ?? "unknown"}`;
+  const rateLimitKey = `${requestPath}:${req.socket.remoteAddress ?? "unknown"}`;
   const nowMs = Date.now();
 
   if (isWebhookRateLimited(rateLimitKey, nowMs)) {
     res.statusCode = 429;
     res.end("Too Many Requests");
-    recordWebhookStatus(target.runtime, path, res.statusCode);
+    recordWebhookStatus(target.runtime, requestPath, res.statusCode);
     return true;
   }
 
   if (!isJsonContentType(req.headers["content-type"])) {
     res.statusCode = 415;
     res.end("Unsupported Media Type");
-    recordWebhookStatus(target.runtime, path, res.statusCode);
+    recordWebhookStatus(target.runtime, requestPath, res.statusCode);
     return true;
   }
 
@@ -183,7 +182,7 @@ export async function handleZaloWebhookRequest(
           ? requestBodyErrorToText("REQUEST_BODY_TIMEOUT")
           : "Bad Request";
     res.end(message);
-    recordWebhookStatus(target.runtime, path, res.statusCode);
+    recordWebhookStatus(target.runtime, requestPath, res.statusCode);
     return true;
   }
 
@@ -198,7 +197,7 @@ export async function handleZaloWebhookRequest(
   if (!update?.event_name) {
     res.statusCode = 400;
     res.end("Bad Request");
-    recordWebhookStatus(target.runtime, path, res.statusCode);
+    recordWebhookStatus(target.runtime, requestPath, res.statusCode);
     return true;
   }
 
