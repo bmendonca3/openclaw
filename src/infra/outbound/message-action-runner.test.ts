@@ -597,6 +597,44 @@ describe("runMessageAction sendAttachment hydration", () => {
       tempPrefix: "msg-group-icon-",
     });
   });
+
+  it("rejects agent auth files under stateDir when sandboxRoot is missing", async () => {
+    await restoreRealMediaLoader();
+
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-state-root-"));
+    const previousStateDir = process.env.OPENCLAW_STATE_DIR;
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+
+    try {
+      const sensitivePath = path.join(stateDir, "agents", "main", "agent", "auth-profiles.json");
+      await fs.mkdir(path.dirname(sensitivePath), { recursive: true });
+      await fs.writeFile(
+        sensitivePath,
+        JSON.stringify({ profiles: { "anthropic:default": { token: "sk-secret" } } }),
+        "utf8",
+      );
+
+      await expect(
+        runMessageAction({
+          cfg,
+          action: "sendAttachment",
+          params: {
+            channel: "bluebubbles",
+            target: "+15551234567",
+            media: sensitivePath,
+            message: "exfil",
+          },
+        }),
+      ).rejects.toThrow(/allowed directory|path-not-allowed/i);
+    } finally {
+      if (previousStateDir === undefined) {
+        delete process.env.OPENCLAW_STATE_DIR;
+      } else {
+        process.env.OPENCLAW_STATE_DIR = previousStateDir;
+      }
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("runMessageAction sandboxed media validation", () => {
