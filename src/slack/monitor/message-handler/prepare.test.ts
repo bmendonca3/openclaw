@@ -208,6 +208,40 @@ describe("slack prepareSlackMessage inbound contract", () => {
     expectInboundContextContract(prepared!.ctxPayload as any);
   });
 
+  it("scopes DM pairing-store checks and requests to accountId", async () => {
+    readChannelAllowFromStoreMock.mockResolvedValueOnce([]);
+    upsertChannelPairingRequestMock.mockResolvedValueOnce({ code: "PAIR", created: false });
+
+    const slackCtx = createInboundSlackCtx({
+      cfg: {
+        channels: { slack: { enabled: true } },
+      } as OpenClawConfig,
+    });
+    slackCtx.dmPolicy = "pairing";
+    slackCtx.allowFrom = ["U_OWNER"];
+
+    const prepared = await prepareMessageWith(
+      slackCtx,
+      createSlackAccount(),
+      createSlackMessage({
+        channel: "D222",
+        channel_type: "im",
+        user: "U_ATTACKER",
+        text: "hello",
+      }),
+    );
+
+    expect(prepared).toBeNull();
+    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "default");
+    expect(upsertChannelPairingRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "slack",
+        id: "U_ATTACKER",
+        accountId: "default",
+      }),
+    );
+  });
+
   it("includes forwarded shared attachment text in raw body", async () => {
     const prepared = await prepareWithDefaultCtx(
       createSlackMessage({
@@ -747,5 +781,6 @@ describe("prepareSlackMessage sender prefix", () => {
     const result = await prepareSenderPrefixMessage(ctx, "<@BOT> /new", "1700000000.0003");
 
     expect(result).toBeNull();
+    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "default");
   });
 });

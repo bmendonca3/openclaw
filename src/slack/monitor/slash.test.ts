@@ -628,6 +628,7 @@ function createPolicyHarness(overrides?: {
   channelName?: string;
   allowFrom?: string[];
   useAccessGroups?: boolean;
+  dmPolicy?: "open" | "allowlist" | "pairing" | "disabled";
   resolveChannelName?: () => Promise<{ name?: string; type?: string }>;
 }) {
   const commands = new Map<unknown, (args: unknown) => Promise<void>>();
@@ -648,9 +649,10 @@ function createPolicyHarness(overrides?: {
     botToken: "bot-token",
     botUserId: "bot",
     teamId: "T1",
+    accountId: "acct",
     allowFrom: overrides?.allowFrom ?? ["*"],
     dmEnabled: true,
-    dmPolicy: "open",
+    dmPolicy: overrides?.dmPolicy ?? "open",
     groupDmEnabled: false,
     groupDmChannels: [],
     defaultRequireMention: true,
@@ -850,6 +852,45 @@ describe("slack slash commands access groups", () => {
       ctx?: { CommandAuthorized?: boolean };
     };
     expect(dispatchArg?.ctx?.CommandAuthorized).toBe(false);
+  });
+
+  it("scopes DM pairing-store reads and writes to accountId for slash commands", async () => {
+    const { readAllowFromStoreMock, upsertPairingRequestMock } = getSlackSlashMocks();
+    readAllowFromStoreMock.mockResolvedValueOnce([]);
+    upsertPairingRequestMock.mockResolvedValueOnce({ code: "PAIRCODE", created: true });
+
+    const harness = createPolicyHarness({
+      allowFrom: ["U_OWNER"],
+      dmPolicy: "pairing",
+      channelId: "D999",
+      channelName: "directmessage",
+      resolveChannelName: async () => ({ name: "directmessage", type: "im" }),
+    });
+
+    const { respond } = await registerAndRunPolicySlash({
+      harness,
+      command: {
+        user_id: "U_ATTACKER",
+        user_name: "Mallory",
+        channel_id: "D999",
+        channel_name: "directmessage",
+      },
+    });
+
+    expect(dispatchMock).not.toHaveBeenCalled();
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "acct");
+    expect(upsertPairingRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "slack",
+        id: "U_ATTACKER",
+        accountId: "acct",
+      }),
+    );
+    expect(respond).toHaveBeenCalledWith(
+      expect.objectContaining({
+        response_type: "ephemeral",
+      }),
+    );
   });
 
   it("enforces access-group gating when lookup fails for private channels", async () => {
