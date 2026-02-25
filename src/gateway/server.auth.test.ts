@@ -1203,6 +1203,93 @@ describe("gateway server auth/connect", () => {
     }
   });
 
+  test("accepts short-lived bootstrap setup token until first successful paired connect", async () => {
+    const { createDevicePairingBootstrapToken } =
+      await import("../infra/device-pairing-bootstrap.js");
+    const { approveDevicePairing, listDevicePairing } = await import("../infra/device-pairing.js");
+    const { server, ws, port, prevToken } = await startServerWithClient("secret", {
+      wsHeaders: { host: "gateway.example" },
+    });
+
+    const bootstrap = await createDevicePairingBootstrapToken();
+    const identityPath = `${process.env.OPENCLAW_STATE_DIR ?? process.cwd()}/identity/bootstrap-${Date.now()}-${Math.random().toString(16).slice(2)}.json`;
+    const firstNonce = await readConnectChallengeNonce(ws);
+    if (!firstNonce) {
+      throw new Error("expected connect challenge nonce");
+    }
+    const firstSignedDevice = await createSignedDevice({
+      token: bootstrap.token,
+      scopes: ["operator.admin"],
+      clientId: TEST_OPERATOR_CLIENT.id,
+      clientMode: TEST_OPERATOR_CLIENT.mode,
+      identityPath,
+      nonce: firstNonce,
+    });
+
+    const first = await connectReq(ws, {
+      token: bootstrap.token,
+      device: firstSignedDevice.device,
+    });
+    expect(first.ok).toBe(false);
+    expect(first.error?.message ?? "").toContain("pairing required");
+
+    const pending = await listDevicePairing();
+    const firstPending = pending.pending.find(
+      (request) => request.deviceId === firstSignedDevice.identity.deviceId,
+    );
+    expect(firstPending?.requestId).toBeDefined();
+    if (!firstPending?.requestId) {
+      throw new Error("expected pending pairing request");
+    }
+    await approveDevicePairing(firstPending.requestId);
+
+    ws.close();
+
+    const ws2 = await openWs(port, { host: "gateway.example" });
+    const secondNonce = await readConnectChallengeNonce(ws2);
+    if (!secondNonce) {
+      throw new Error("expected second connect challenge nonce");
+    }
+    const secondSignedDevice = await createSignedDevice({
+      token: bootstrap.token,
+      scopes: ["operator.admin"],
+      clientId: TEST_OPERATOR_CLIENT.id,
+      clientMode: TEST_OPERATOR_CLIENT.mode,
+      identityPath,
+      nonce: secondNonce,
+    });
+    const second = await connectReq(ws2, {
+      token: bootstrap.token,
+      device: secondSignedDevice.device,
+    });
+    expect(second.ok).toBe(true);
+    ws2.close();
+
+    const ws3 = await openWs(port, { host: "gateway.example" });
+    const thirdNonce = await readConnectChallengeNonce(ws3);
+    if (!thirdNonce) {
+      throw new Error("expected third connect challenge nonce");
+    }
+    const thirdSignedDevice = await createSignedDevice({
+      token: bootstrap.token,
+      scopes: ["operator.admin"],
+      clientId: TEST_OPERATOR_CLIENT.id,
+      clientMode: TEST_OPERATOR_CLIENT.mode,
+      identityPath,
+      nonce: thirdNonce,
+    });
+    const third = await connectReq(ws3, {
+      token: bootstrap.token,
+      device: thirdSignedDevice.device,
+    });
+    expect(third.ok).toBe(false);
+    expect(third.error?.message ?? "").toContain("gateway token mismatch");
+    ws3.close();
+
+    await server.close();
+    restoreGatewayToken(prevToken);
+  });
+
   test("keeps shared-secret lockout separate from device-token auth", async () => {
     const { server, port, prevToken, deviceToken, deviceIdentityPath } =
       await startRateLimitedTokenServerWithPairedDeviceToken();
