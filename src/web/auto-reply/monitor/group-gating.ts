@@ -3,6 +3,10 @@ import { parseActivationCommand } from "../../../auto-reply/group-activation.js"
 import { recordPendingHistoryEntryIfEnabled } from "../../../auto-reply/reply/history.js";
 import { resolveMentionGating } from "../../../channels/mention-gating.js";
 import type { loadConfig } from "../../../config/config.js";
+import {
+  resolveAllowlistProviderRuntimeGroupPolicy,
+  resolveDefaultGroupPolicy,
+} from "../../../config/runtime-group-policy.js";
 import { normalizeE164 } from "../../../utils.js";
 import type { MentionConfig } from "../mentions.js";
 import { buildMentionConfig, debugMention, resolveOwnerList } from "../mentions.js";
@@ -79,11 +83,72 @@ function skipGroupMessageAndStoreHistory(params: ApplyGroupGatingParams, verbose
   return { shouldProcess: false } as const;
 }
 
+function normalizeAllowFromE164(values: Array<string | number> | undefined): string[] {
+  const list = Array.isArray(values) ? values : [];
+  return list
+    .map((entry) => String(entry).trim())
+    .filter((entry) => entry && entry !== "*")
+    .map((entry) => normalizeE164(entry))
+    .filter((entry): entry is string => Boolean(entry));
+}
+
+function resolveGroupSenderAllowlistAccess(params: {
+  cfg: ReturnType<typeof loadConfig>;
+  msg: WebInboundMsg;
+}): { allowed: true } | { allowed: false; reason: "missing-allowlist" | "sender-not-allowlisted" } {
+  const defaultGroupPolicy = resolveDefaultGroupPolicy(params.cfg);
+  const whatsappCfg = params.cfg.channels?.whatsapp;
+  const { groupPolicy } = resolveAllowlistProviderRuntimeGroupPolicy({
+    providerConfigPresent: whatsappCfg !== undefined,
+    groupPolicy: whatsappCfg?.groupPolicy,
+    defaultGroupPolicy,
+  });
+  if (groupPolicy !== "allowlist") {
+    return { allowed: true };
+  }
+
+  const configuredAllowFrom = whatsappCfg?.allowFrom ?? [];
+  const configuredGroupAllowFrom =
+    whatsappCfg?.groupAllowFrom ??
+    (configuredAllowFrom.length > 0 ? configuredAllowFrom : undefined);
+  if (!configuredGroupAllowFrom || configuredGroupAllowFrom.length === 0) {
+    return { allowed: false, reason: "missing-allowlist" };
+  }
+  if (configuredGroupAllowFrom.some((entry) => String(entry).trim() === "*")) {
+    return { allowed: true };
+  }
+
+  const senderE164 = normalizeE164(params.msg.senderE164 ?? "");
+  if (!senderE164) {
+    return { allowed: false, reason: "sender-not-allowlisted" };
+  }
+  if (normalizeAllowFromE164(configuredGroupAllowFrom).includes(senderE164)) {
+    return { allowed: true };
+  }
+  return { allowed: false, reason: "sender-not-allowlisted" };
+}
+
 export function applyGroupGating(params: ApplyGroupGatingParams) {
   const groupPolicy = resolveGroupPolicyFor(params.cfg, params.conversationId);
   if (groupPolicy.allowlistEnabled && !groupPolicy.allowed) {
     params.logVerbose(`Skipping group message ${params.conversationId} (not in allowlist)`);
     return { shouldProcess: false };
+  }
+  const senderAccess = resolveGroupSenderAllowlistAccess({
+    cfg: params.cfg,
+    msg: params.msg,
+  });
+  if (!senderAccess.allowed) {
+    if (senderAccess.reason === "missing-allowlist") {
+      return skipGroupMessageAndStoreHistory(
+        params,
+        `Blocked group message ${params.conversationId} (groupPolicy: allowlist, no groupAllowFrom)`,
+      );
+    }
+    return skipGroupMessageAndStoreHistory(
+      params,
+      `Blocked group sender ${params.msg.senderE164 ?? "unknown"} (not in groupAllowFrom)`,
+    );
   }
 
   noteGroupMember(

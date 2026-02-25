@@ -270,6 +270,87 @@ describe("applyGroupGating", () => {
 
     expect(result.shouldProcess).toBe(false);
   });
+
+  it("blocks non-allowlisted group senders when groupPolicy is allowlist", () => {
+    const cfg = makeConfig({
+      channels: {
+        whatsapp: {
+          groupPolicy: "allowlist",
+          groupAllowFrom: ["+111"],
+          groups: { "*": { requireMention: false } },
+        },
+      },
+    });
+
+    const { result, groupHistories } = runGroupGating({
+      cfg,
+      msg: createGroupMessage({
+        id: "g-allowlist-sender-block",
+        body: "hello",
+        senderE164: "+222",
+        senderName: "NotOwner",
+      }),
+    });
+
+    expect(result.shouldProcess).toBe(false);
+    expect(groupHistories.get("whatsapp:default:group:123@g.us")?.length).toBe(1);
+  });
+
+  it("allows allowlisted group senders when groupPolicy is allowlist", () => {
+    const cfg = makeConfig({
+      channels: {
+        whatsapp: {
+          groupPolicy: "allowlist",
+          groupAllowFrom: ["+111"],
+          groups: { "*": { requireMention: false } },
+        },
+      },
+    });
+
+    const { result } = runGroupGating({
+      cfg,
+      msg: createGroupMessage({
+        id: "g-allowlist-sender-allow",
+        body: "hello",
+        senderE164: "+111",
+        senderName: "Owner",
+      }),
+    });
+
+    expect(result.shouldProcess).toBe(true);
+  });
+
+  it("falls back to allowFrom for group sender checks when groupAllowFrom is unset", () => {
+    const cfg = makeConfig({
+      channels: {
+        whatsapp: {
+          groupPolicy: "allowlist",
+          allowFrom: ["+111"],
+          groups: { "*": { requireMention: false } },
+        },
+      },
+    });
+
+    const blocked = runGroupGating({
+      cfg,
+      msg: createGroupMessage({
+        id: "g-allowfrom-fallback-block",
+        body: "hello",
+        senderE164: "+222",
+      }),
+    });
+    expect(blocked.result.shouldProcess).toBe(false);
+
+    const allowed = runGroupGating({
+      cfg,
+      msg: createGroupMessage({
+        id: "g-allowfrom-fallback-allow",
+        body: "hello",
+        senderE164: "+111",
+      }),
+    });
+    expect(allowed.result.shouldProcess).toBe(true);
+  });
 });
 
 describe("buildInboundLine", () => {
