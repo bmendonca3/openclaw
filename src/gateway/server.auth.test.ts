@@ -600,6 +600,35 @@ describe("gateway server auth/connect", () => {
       await new Promise<void>((resolve) => ws.once("close", () => resolve()));
     });
 
+    test("rejects oversized pre-auth frames before handshake parsing", async () => {
+      const prevMaxPreAuth = process.env.OPENCLAW_TEST_MAX_PREAUTH_FRAME_BYTES;
+      process.env.OPENCLAW_TEST_MAX_PREAUTH_FRAME_BYTES = "512";
+      try {
+        const ws = await openWs(port);
+        const closeInfoPromise = new Promise<{ code: number; reason: string }>((resolve) => {
+          ws.once("close", (code, reason) => resolve({ code, reason: reason.toString() }));
+        });
+        const oversizedFrame = JSON.stringify({
+          type: "req",
+          id: "oversized-preauth",
+          method: "health",
+          padding: "x".repeat(4096),
+        });
+        expect(Buffer.byteLength(oversizedFrame, "utf8")).toBeGreaterThan(512);
+        ws.send(oversizedFrame);
+
+        const closeInfo = await closeInfoPromise;
+        expect(closeInfo.code).toBe(1009);
+        expect(closeInfo.reason).toContain("pre-auth frame too large");
+      } finally {
+        if (prevMaxPreAuth === undefined) {
+          delete process.env.OPENCLAW_TEST_MAX_PREAUTH_FRAME_BYTES;
+        } else {
+          process.env.OPENCLAW_TEST_MAX_PREAUTH_FRAME_BYTES = prevMaxPreAuth;
+        }
+      }
+    });
+
     test("requires nonce for device auth", async () => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
         headers: { host: "example.com" },
