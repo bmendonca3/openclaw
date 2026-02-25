@@ -189,26 +189,28 @@ export function resolveDiscordMemberAllowed(params: {
   userTag?: string;
   allowNameMatching?: boolean;
 }) {
-  const hasUserRestriction = Array.isArray(params.userAllowList) && params.userAllowList.length > 0;
-  const hasRoleRestriction = Array.isArray(params.roleAllowList) && params.roleAllowList.length > 0;
+  const hasUserRestriction = Array.isArray(params.userAllowList);
+  const hasRoleRestriction = Array.isArray(params.roleAllowList);
   if (!hasUserRestriction && !hasRoleRestriction) {
     return true;
   }
-  const userOk = hasUserRestriction
-    ? resolveDiscordUserAllowed({
-        allowList: params.userAllowList,
-        userId: params.userId,
-        userName: params.userName,
-        userTag: params.userTag,
-        allowNameMatching: params.allowNameMatching,
-      })
-    : false;
-  const roleOk = hasRoleRestriction
-    ? resolveDiscordRoleAllowed({
-        allowList: params.roleAllowList,
-        memberRoleIds: params.memberRoleIds,
-      })
-    : false;
+  const userOk =
+    hasUserRestriction && params.userAllowList.length > 0
+      ? resolveDiscordUserAllowed({
+          allowList: params.userAllowList,
+          userId: params.userId,
+          userName: params.userName,
+          userTag: params.userTag,
+          allowNameMatching: params.allowNameMatching,
+        })
+      : false;
+  const roleOk =
+    hasRoleRestriction && params.roleAllowList.length > 0
+      ? resolveDiscordRoleAllowed({
+          allowList: params.roleAllowList,
+          memberRoleIds: params.memberRoleIds,
+        })
+      : false;
   return userOk || roleOk;
 }
 
@@ -219,11 +221,15 @@ export function resolveDiscordMemberAccessState(params: {
   sender: { id: string; name?: string; tag?: string };
   allowNameMatching?: boolean;
 }) {
-  const channelUsers = params.channelConfig?.users ?? params.guildInfo?.users;
-  const channelRoles = params.channelConfig?.roles ?? params.guildInfo?.roles;
-  const hasAccessRestrictions =
-    (Array.isArray(channelUsers) && channelUsers.length > 0) ||
-    (Array.isArray(channelRoles) && channelRoles.length > 0);
+  const hasChannelUsersOverride = Array.isArray(params.channelConfig?.users);
+  const hasChannelRolesOverride = Array.isArray(params.channelConfig?.roles);
+  const channelUsers = hasChannelUsersOverride
+    ? params.channelConfig?.users
+    : params.guildInfo?.users;
+  const channelRoles = hasChannelRolesOverride
+    ? params.channelConfig?.roles
+    : params.guildInfo?.roles;
+  const hasAccessRestrictions = Array.isArray(channelUsers) || Array.isArray(channelRoles);
   const memberAllowed = resolveDiscordMemberAllowed({
     userAllowList: channelUsers,
     roleAllowList: channelRoles,
