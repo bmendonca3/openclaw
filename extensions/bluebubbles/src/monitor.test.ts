@@ -1121,6 +1121,97 @@ describe("BlueBubbles webhook monitor", () => {
       expect(mockDispatchReplyWithBufferedBlockDispatcher).not.toHaveBeenCalled();
     });
 
+    it("reads pairing allowlist with account-scoped key for DM messages", async () => {
+      const account: ResolvedBlueBubblesAccount = {
+        ...createMockAccount({
+          dmPolicy: "pairing",
+          allowFrom: [],
+        }),
+        accountId: "work",
+      };
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+      mockReadAllowFromStore.mockResolvedValue(["+15551234567"]);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const payload = {
+        type: "new-message",
+        data: {
+          text: "hello",
+          handle: { address: "+15551234567" },
+          isGroup: false,
+          isFromMe: false,
+          guid: "msg-1",
+          date: Date.now(),
+        },
+      };
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", payload);
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      expect(mockReadAllowFromStore).toHaveBeenCalledWith("bluebubbles", undefined, "work");
+      expect(mockDispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalled();
+    });
+
+    it("stores pairing requests with accountId metadata", async () => {
+      const account: ResolvedBlueBubblesAccount = {
+        ...createMockAccount({
+          dmPolicy: "pairing",
+          allowFrom: [],
+        }),
+        accountId: "work",
+      };
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+      mockReadAllowFromStore.mockResolvedValue([]);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const payload = {
+        type: "new-message",
+        data: {
+          text: "hello",
+          handle: { address: "+15551234567" },
+          isGroup: false,
+          isFromMe: false,
+          guid: "msg-1",
+          date: Date.now(),
+        },
+      };
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", payload);
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      expect(mockUpsertPairingRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: "bluebubbles",
+          id: "+15551234567",
+          accountId: "work",
+        }),
+      );
+    });
+
     it("triggers pairing flow for unknown sender when dmPolicy=pairing", async () => {
       const account = createMockAccount({
         dmPolicy: "pairing",
@@ -2772,6 +2863,47 @@ describe("BlueBubbles webhook monitor", () => {
   });
 
   describe("reaction events", () => {
+    it("reads pairing allowlist with account-scoped key for reactions", async () => {
+      mockEnqueueSystemEvent.mockClear();
+
+      const account: ResolvedBlueBubblesAccount = {
+        ...createMockAccount({ dmPolicy: "pairing", allowFrom: [] }),
+        accountId: "work",
+      };
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+      mockReadAllowFromStore.mockResolvedValue([]);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const payload = {
+        type: "message-reaction",
+        data: {
+          handle: { address: "+15551234567" },
+          isGroup: false,
+          isFromMe: false,
+          associatedMessageGuid: "msg-original-123",
+          associatedMessageType: 2000,
+          date: Date.now(),
+        },
+      };
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", payload);
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      expect(mockReadAllowFromStore).toHaveBeenCalledWith("bluebubbles", undefined, "work");
+    });
+
     it("drops DM reactions when dmPolicy=pairing and allowFrom is empty", async () => {
       mockEnqueueSystemEvent.mockClear();
 
