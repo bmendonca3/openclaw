@@ -10,8 +10,8 @@ const upsertChannelPairingRequestMock = vi.hoisted(() =>
 );
 
 vi.mock("../../pairing/pairing-store.js", () => ({
-  readChannelAllowFromStore: (...args: unknown[]) => readChannelAllowFromStoreMock(...args),
-  upsertChannelPairingRequest: (...args: unknown[]) => upsertChannelPairingRequestMock(...args),
+  readChannelAllowFromStore: readChannelAllowFromStoreMock,
+  upsertChannelPairingRequest: upsertChannelPairingRequestMock,
 }));
 
 describe("discord preflight pairing account scope", () => {
@@ -65,13 +65,13 @@ describe("discord preflight pairing account scope", () => {
       groupPolicy: "allowlist",
       threadBindings: {
         getByThreadId: () => undefined,
-      } as DiscordMessagePreflightParams["threadBindings"],
+      } as unknown as DiscordMessagePreflightParams["threadBindings"],
       data: {
         channel_id: "dm-1",
         author,
         message,
       } as DiscordMessagePreflightParams["data"],
-      client: client as DiscordMessagePreflightParams["client"],
+      client: client as unknown as DiscordMessagePreflightParams["client"],
     });
 
     expect(result).toBeNull();

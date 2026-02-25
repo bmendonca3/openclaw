@@ -11,8 +11,8 @@ const upsertChannelPairingRequestMock = vi.hoisted(() =>
 );
 
 vi.mock("../../pairing/pairing-store.js", () => ({
-  readChannelAllowFromStore: (...args: unknown[]) => readChannelAllowFromStoreMock(...args),
-  upsertChannelPairingRequest: (...args: unknown[]) => upsertChannelPairingRequestMock(...args),
+  readChannelAllowFromStore: readChannelAllowFromStoreMock,
+  upsertChannelPairingRequest: upsertChannelPairingRequestMock,
 }));
 
 describe("discord native command pairing account scope", () => {
