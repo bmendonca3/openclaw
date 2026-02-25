@@ -124,10 +124,10 @@ async function shouldProcessLineEvent(
 
   const storeAllowFrom = await readChannelAllowFromStore(
     "line",
-    process.env,
+    undefined,
     account.accountId,
   ).catch(() => []);
-  const effectiveDmAllow = normalizeDmAllowFromWithStore({
+  const effectiveDmAllow = normalizeAllowFromWithStore({
     allowFrom: account.config.allowFrom,
     storeAllowFrom,
     dmPolicy,
