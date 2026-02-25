@@ -53,6 +53,8 @@ export type GoogleChatMonitorOptions = {
 
 type GoogleChatCoreRuntime = ReturnType<typeof getGoogleChatRuntime>;
 
+type WebhookRateLimitState = { count: number; windowStartMs: number };
+
 type WebhookTarget = {
   account: ResolvedGoogleChatAccount;
   config: OpenClawConfig;
@@ -66,6 +68,64 @@ type WebhookTarget = {
 };
 
 const webhookTargets = new Map<string, WebhookTarget[]>();
+const webhookRateLimits = new Map<string, WebhookRateLimitState>();
+
+const GOOGLECHAT_WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
+const GOOGLECHAT_WEBHOOK_RATE_LIMIT_MAX_REQUESTS = 120;
+const GOOGLECHAT_WEBHOOK_RATE_LIMIT_MAX_TRACKED_KEYS = 4_096;
+
+let lastWebhookRateLimitCleanupMs = 0;
+
+function trimWebhookRateLimitState(): void {
+  while (webhookRateLimits.size > GOOGLECHAT_WEBHOOK_RATE_LIMIT_MAX_TRACKED_KEYS) {
+    const oldestKey = webhookRateLimits.keys().next().value;
+    if (typeof oldestKey !== "string") {
+      break;
+    }
+    webhookRateLimits.delete(oldestKey);
+  }
+}
+
+function maybePruneWebhookRateLimitState(nowMs: number): void {
+  if (
+    webhookRateLimits.size === 0 ||
+    nowMs - lastWebhookRateLimitCleanupMs < GOOGLECHAT_WEBHOOK_RATE_LIMIT_WINDOW_MS
+  ) {
+    return;
+  }
+  lastWebhookRateLimitCleanupMs = nowMs;
+  for (const [key, state] of webhookRateLimits) {
+    if (nowMs - state.windowStartMs >= GOOGLECHAT_WEBHOOK_RATE_LIMIT_WINDOW_MS) {
+      webhookRateLimits.delete(key);
+    }
+  }
+}
+
+export function clearGoogleChatWebhookRateLimits(): void {
+  webhookRateLimits.clear();
+  lastWebhookRateLimitCleanupMs = 0;
+}
+
+export function getGoogleChatWebhookRateLimitStateSize(): number {
+  return webhookRateLimits.size;
+}
+
+export function isGoogleChatWebhookRateLimited(key: string, nowMs: number): boolean {
+  maybePruneWebhookRateLimitState(nowMs);
+
+  const state = webhookRateLimits.get(key);
+  if (!state || nowMs - state.windowStartMs >= GOOGLECHAT_WEBHOOK_RATE_LIMIT_WINDOW_MS) {
+    webhookRateLimits.set(key, { count: 1, windowStartMs: nowMs });
+    trimWebhookRateLimitState();
+    return false;
+  }
+
+  state.count += 1;
+  if (state.count > GOOGLECHAT_WEBHOOK_RATE_LIMIT_MAX_REQUESTS) {
+    return true;
+  }
+  return false;
+}
 
 function logVerbose(core: GoogleChatCoreRuntime, runtime: GoogleChatRuntimeEnv, message: string) {
   if (core.logging.shouldLogVerbose()) {
@@ -125,9 +185,16 @@ export async function handleGoogleChatWebhookRequest(
   if (!resolved) {
     return false;
   }
-  const { targets } = resolved;
+  const { path, targets } = resolved;
 
   if (rejectNonPostWebhookRequest(req, res)) {
+    return true;
+  }
+
+  const rateLimitKey = `${path}:${req.socket?.remoteAddress ?? "unknown"}`;
+  if (isGoogleChatWebhookRateLimited(rateLimitKey, Date.now())) {
+    res.statusCode = 429;
+    res.end("Too Many Requests");
     return true;
   }
 
