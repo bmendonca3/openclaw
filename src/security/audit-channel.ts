@@ -228,7 +228,7 @@ export async function collectChannelSecurityFindings(params: {
         const dangerousNameMatchingEnabled = isDangerousNameMatchingEnabled(discordCfg);
         const storeAllowFrom = await readChannelAllowFromStore(
           "discord",
-          process.env,
+          undefined,
           accountId,
         ).catch(() => []);
         const discordNameBasedAllowEntries = new Set<string>();
