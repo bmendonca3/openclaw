@@ -25,6 +25,8 @@ const DEFAULT_WEBHOOK_HOST = "0.0.0.0";
 const DEFAULT_WEBHOOK_PATH = "/nextcloud-talk-webhook";
 const DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024;
 const DEFAULT_WEBHOOK_BODY_TIMEOUT_MS = 30_000;
+const DEFAULT_WEBHOOK_REPLAY_WINDOW_MS = 10 * 60 * 1000;
+const DEFAULT_WEBHOOK_REPLAY_CACHE_MAX_ENTRIES = 4096;
 const HEALTH_PATH = "/healthz";
 const WEBHOOK_ERRORS = {
   missingSignatureHeaders: "Missing signature headers",
@@ -188,9 +190,24 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
     opts.maxBodyBytes > 0
       ? Math.floor(opts.maxBodyBytes)
       : DEFAULT_WEBHOOK_MAX_BODY_BYTES;
-  const readBody = opts.readBody ?? readNextcloudTalkWebhookBody;
-  const isBackendAllowed = opts.isBackendAllowed;
-  const shouldProcessMessage = opts.shouldProcessMessage;
+  const seenWebhookSignatures = new Map<string, number>();
+
+  const pruneReplayCache = (nowMs: number) => {
+    const minSeenAt = nowMs - DEFAULT_WEBHOOK_REPLAY_WINDOW_MS;
+    for (const [key, seenAt] of seenWebhookSignatures) {
+      if (seenAt < minSeenAt) {
+        seenWebhookSignatures.delete(key);
+      }
+    }
+
+    while (seenWebhookSignatures.size > DEFAULT_WEBHOOK_REPLAY_CACHE_MAX_ENTRIES) {
+      const oldestEntry = seenWebhookSignatures.keys().next();
+      if (oldestEntry.done) {
+        break;
+      }
+      seenWebhookSignatures.delete(oldestEntry.value);
+    }
+  };
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === HEALTH_PATH) {
@@ -227,15 +244,20 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
         return;
       }
 
-      const decoded = decodeWebhookCreateMessage({
-        body,
-        res,
-      });
-      if (decoded.kind === "invalid") {
+      const nowMs = Date.now();
+      pruneReplayCache(nowMs);
+      const replayKey = `${headers.backend}\n${headers.random}\n${headers.signature}`;
+      if (seenWebhookSignatures.has(replayKey)) {
+        res.writeHead(200);
+        res.end();
         return;
       }
-      if (decoded.kind === "ignore") {
-        writeJsonResponse(res, 200);
+      seenWebhookSignatures.set(replayKey, nowMs);
+
+      const payload = parseWebhookPayload(body);
+      if (!payload) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid payload format" }));
         return;
       }
 
