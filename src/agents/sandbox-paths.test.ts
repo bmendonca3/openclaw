@@ -69,6 +69,33 @@ async function withOutsideHardlinkInOpenClawTmp<T>(
   }
 }
 
+async function withOutsideHardlinkInSandbox<T>(
+  params: {
+    sandboxDir: string;
+    hardlinkPrefix: string;
+  },
+  run: (paths: { hardlinkPath: string }) => Promise<T>,
+): Promise<void> {
+  const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "sandbox-media-hardlink-outside-"));
+  const outsideFile = path.join(outsideDir, "outside-secret.txt");
+  const hardlinkPath = path.join(params.sandboxDir, makeTmpProbePath(params.hardlinkPrefix));
+  try {
+    await fs.writeFile(outsideFile, "secret", "utf8");
+    try {
+      await fs.link(outsideFile, hardlinkPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EXDEV") {
+        return;
+      }
+      throw err;
+    }
+    await run({ hardlinkPath });
+  } finally {
+    await fs.rm(hardlinkPath, { force: true });
+    await fs.rm(outsideDir, { recursive: true, force: true });
+  }
+}
+
 describe("resolveSandboxedMediaSource", () => {
   const openClawTmpDir = resolvePreferredOpenClawTmpDir();
 
@@ -251,6 +278,23 @@ describe("resolveSandboxedMediaSource", () => {
         });
       },
     );
+  });
+
+  it("rejects hardlinked sandbox paths to outside files", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    await withSandboxRoot(async (sandboxDir) => {
+      await withOutsideHardlinkInSandbox(
+        {
+          sandboxDir,
+          hardlinkPrefix: "sandbox-root-hardlink",
+        },
+        async ({ hardlinkPath }) => {
+          await expectSandboxRejection(hardlinkPath, sandboxDir, /hard.?link|sandbox/i);
+        },
+      );
+    });
   });
 
   // Group 4: Passthrough
