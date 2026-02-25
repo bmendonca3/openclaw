@@ -5,15 +5,16 @@ import { handleNextcloudTalkInbound } from "./inbound.js";
 import { setNextcloudTalkRuntime } from "./runtime.js";
 import type { CoreConfig, NextcloudTalkInboundMessage } from "./types.js";
 
-describe("nextcloud-talk inbound authz", () => {
-  it("does not treat DM pairing-store entries as group allowlist entries", async () => {
-    const readAllowFromStore = vi.fn(async () => ["attacker"]);
-    const buildMentionRegexes = vi.fn(() => [/@openclaw/i]);
+describe("nextcloud-talk pairing account scope", () => {
+  it("uses account-scoped pairing reads/writes for DM authorization", async () => {
+    const readAllowFromStore = vi.fn(async (...args: unknown[]) => (args[2] ? [] : ["alice"]));
+    const upsertPairingRequest = vi.fn(async () => ({ code: "PAIR42", created: false }));
 
     setNextcloudTalkRuntime({
       channel: {
         pairing: {
           readAllowFromStore,
+          upsertPairingRequest,
         },
         commands: {
           shouldHandleTextCommands: () => false,
@@ -21,27 +22,23 @@ describe("nextcloud-talk inbound authz", () => {
         text: {
           hasControlCommand: () => false,
         },
-        mentions: {
-          buildMentionRegexes,
-          matchesMentionPatterns: () => false,
-        },
       },
     } as unknown as PluginRuntime);
 
     const message: NextcloudTalkInboundMessage = {
       messageId: "m-1",
       roomToken: "room-1",
-      roomName: "Room 1",
-      senderId: "attacker",
-      senderName: "Attacker",
+      roomName: "Direct",
+      senderId: "alice",
+      senderName: "Alice",
       text: "hello",
       mediaType: "text/plain",
       timestamp: Date.now(),
-      isGroupChat: true,
+      isGroupChat: false,
     };
 
     const account: ResolvedNextcloudTalkAccount = {
-      accountId: "default",
+      accountId: "work",
       enabled: true,
       baseUrl: "",
       secret: "",
@@ -75,7 +72,12 @@ describe("nextcloud-talk inbound authz", () => {
       } as unknown as RuntimeEnv,
     });
 
-    expect(readAllowFromStore).toHaveBeenCalledWith("nextcloud-talk", undefined, "default");
-    expect(buildMentionRegexes).not.toHaveBeenCalled();
+    expect(readAllowFromStore).toHaveBeenCalledWith("nextcloud-talk", undefined, "work");
+    expect(upsertPairingRequest).toHaveBeenCalledWith({
+      channel: "nextcloud-talk",
+      id: "alice",
+      accountId: "work",
+      meta: { name: "Alice" },
+    });
   });
 });
