@@ -25,7 +25,7 @@ import {
   firstDefined,
   isSenderAllowed,
   normalizeAllowFrom,
-  normalizeDmAllowFromWithStore,
+  normalizeAllowFromWithStore,
 } from "./bot-access.js";
 import {
   getLineSourceInfo,
@@ -142,8 +142,8 @@ async function shouldProcessLineEvent(
     account.config.groupAllowFrom,
     fallbackGroupAllowFrom,
   );
-  // Group authorization stays explicit to group allowlists and must not
-  // inherit DM pairing-store identities.
+  // Group sender policy must be derived from explicit group config only.
+  // Pairing store entries are DM-oriented and must not expand group allowlists.
   const effectiveGroupAllow = normalizeAllowFrom(groupAllowFrom);
   const defaultGroupPolicy = resolveDefaultGroupPolicy(cfg);
   const { groupPolicy, providerMissingFallbackApplied } =
