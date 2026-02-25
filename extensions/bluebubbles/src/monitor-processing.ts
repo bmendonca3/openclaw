@@ -508,10 +508,13 @@ export async function processMessage(
 
   const dmPolicy = account.config.dmPolicy ?? "pairing";
   const groupPolicy = account.config.groupPolicy ?? "allowlist";
-  const configuredAllowFrom = (account.config.allowFrom ?? []).map((entry) => String(entry));
-  const storeAllowFrom = await readStoreAllowFromForDmPolicy({
-    provider: "bluebubbles",
-    accountId: account.accountId,
+  const storeAllowFrom = isGroup
+    ? []
+    : await core.channel.pairing.readAllowFromStore("bluebubbles").catch(() => []);
+  const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveEffectiveAllowFromLists({
+    allowFrom: account.config.allowFrom,
+    groupAllowFrom: account.config.groupAllowFrom,
+    storeAllowFrom,
     dmPolicy,
     readStore: pairing.readStoreForDmPolicy,
   });
@@ -1398,9 +1401,13 @@ export async function processReaction(
 
   const dmPolicy = account.config.dmPolicy ?? "pairing";
   const groupPolicy = account.config.groupPolicy ?? "allowlist";
-  const storeAllowFrom = await readStoreAllowFromForDmPolicy({
-    provider: "bluebubbles",
-    accountId: account.accountId,
+  const storeAllowFrom = reaction.isGroup
+    ? []
+    : await core.channel.pairing.readAllowFromStore("bluebubbles").catch(() => []);
+  const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveEffectiveAllowFromLists({
+    allowFrom: account.config.allowFrom,
+    groupAllowFrom: account.config.groupAllowFrom,
+    storeAllowFrom,
     dmPolicy,
     readStore: pairing.readStoreForDmPolicy,
   });
