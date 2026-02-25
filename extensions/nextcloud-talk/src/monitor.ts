@@ -25,6 +25,8 @@ const DEFAULT_WEBHOOK_HOST = "0.0.0.0";
 const DEFAULT_WEBHOOK_PATH = "/nextcloud-talk-webhook";
 const DEFAULT_WEBHOOK_MAX_BODY_BYTES = 1024 * 1024;
 const DEFAULT_WEBHOOK_BODY_TIMEOUT_MS = 30_000;
+const NEXTCLOUD_WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
+const NEXTCLOUD_WEBHOOK_RATE_LIMIT_MAX_REQUESTS = 120;
 const HEALTH_PATH = "/healthz";
 const WEBHOOK_ERRORS = {
   missingSignatureHeaders: "Missing signature headers",
@@ -34,6 +36,23 @@ const WEBHOOK_ERRORS = {
   payloadTooLarge: "Payload too large",
   internalServerError: "Internal server error",
 } as const;
+
+type WebhookRateLimitState = { count: number; windowStartMs: number };
+const webhookRateLimits = new Map<string, WebhookRateLimitState>();
+
+function isWebhookRateLimited(key: string, nowMs: number): boolean {
+  const state = webhookRateLimits.get(key);
+  if (!state || nowMs - state.windowStartMs >= NEXTCLOUD_WEBHOOK_RATE_LIMIT_WINDOW_MS) {
+    webhookRateLimits.set(key, { count: 1, windowStartMs: nowMs });
+    return false;
+  }
+
+  state.count += 1;
+  if (state.count > NEXTCLOUD_WEBHOOK_RATE_LIMIT_MAX_REQUESTS) {
+    return true;
+  }
+  return false;
+}
 
 function formatError(err: unknown): string {
   if (err instanceof Error) {
@@ -202,6 +221,13 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
     if (req.url !== path || req.method !== "POST") {
       res.writeHead(404);
       res.end();
+      return;
+    }
+
+    const rateLimitKey = `${path}:${req.socket.remoteAddress ?? "unknown"}`;
+    if (isWebhookRateLimited(rateLimitKey, Date.now())) {
+      res.writeHead(429, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Too Many Requests" }));
       return;
     }
 
