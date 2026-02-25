@@ -419,6 +419,7 @@ async function processMessageWithPipeline(params: {
   const senderName = sender?.displayName ?? "";
   const senderEmail = sender?.email ?? undefined;
   const allowNameMatching = isDangerousNameMatchingEnabled(account.config);
+  const accountId = account.accountId?.trim() || undefined;
 
   const allowBots = account.config.allowBots === true;
   if (!allowBots) {
@@ -520,7 +521,9 @@ async function processMessageWithPipeline(params: {
   const shouldComputeAuth = core.channel.commands.shouldComputeCommandAuthorized(rawBody, config);
   const storeAllowFrom =
     !isGroup && dmPolicy !== "allowlist" && (dmPolicy !== "open" || shouldComputeAuth)
-      ? await pairing.readAllowFromStore().catch(() => [])
+      ? await core.channel.pairing
+          .readAllowFromStore("googlechat", undefined, accountId)
+          .catch(() => [])
       : [];
   const access = resolveDmGroupAccessWithLists({
     isGroup,
@@ -594,27 +597,32 @@ async function processMessageWithPipeline(params: {
       return;
     }
 
-    if (access.decision !== "allow") {
-      if (access.decision === "pairing") {
-        const { code, created } = await pairing.upsertPairingRequest({
-          id: senderId,
-          meta: { name: senderName || undefined, email: senderEmail },
-        });
-        if (created) {
-          logVerbose(core, runtime, `googlechat pairing request sender=${senderId}`);
-          try {
-            await sendGoogleChatMessage({
-              account,
-              space: spaceId,
-              text: core.channel.pairing.buildPairingReply({
-                channel: "googlechat",
-                idLine: `Your Google Chat user id: ${senderId}`,
-                code,
-              }),
-            });
-            statusSink?.({ lastOutboundAt: Date.now() });
-          } catch (err) {
-            logVerbose(core, runtime, `pairing reply failed for ${senderId}: ${String(err)}`);
+    if (dmPolicy !== "open") {
+      const allowed = senderAllowedForCommands;
+      if (!allowed) {
+        if (dmPolicy === "pairing") {
+          const { code, created } = await core.channel.pairing.upsertPairingRequest({
+            channel: "googlechat",
+            id: senderId,
+            accountId,
+            meta: { name: senderName || undefined, email: senderEmail },
+          });
+          if (created) {
+            logVerbose(core, runtime, `googlechat pairing request sender=${senderId}`);
+            try {
+              await sendGoogleChatMessage({
+                account,
+                space: spaceId,
+                text: core.channel.pairing.buildPairingReply({
+                  channel: "googlechat",
+                  idLine: `Your Google Chat user id: ${senderId}`,
+                  code,
+                }),
+              });
+              statusSink?.({ lastOutboundAt: Date.now() });
+            } catch (err) {
+              logVerbose(core, runtime, `pairing reply failed for ${senderId}: ${String(err)}`);
+            }
           }
         }
       } else {

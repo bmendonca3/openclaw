@@ -135,4 +135,98 @@ describe("Google Chat webhook routing", () => {
       unregister();
     }
   });
+
+  it("scopes DM pairing checks to accountId", async () => {
+    vi.mocked(verifyGoogleChatRequest).mockResolvedValue({ ok: true });
+
+    const readAllowFromStore = vi.fn(async (...args: unknown[]) =>
+      args[2] ? [] : ["users/alice"],
+    );
+    const upsertPairingRequest = vi.fn(async () => ({ code: "PAIR42", created: false }));
+    const core = {
+      logging: {
+        shouldLogVerbose: () => false,
+      },
+      channel: {
+        commands: {
+          shouldComputeCommandAuthorized: () => false,
+        },
+        pairing: {
+          readAllowFromStore,
+          upsertPairingRequest,
+          buildPairingReply: () => "pairing",
+        },
+      },
+    } as unknown as PluginRuntime;
+
+    const account = {
+      accountId: "work",
+      enabled: true,
+      credentialSource: "service-account",
+      config: {
+        dm: { policy: "pairing", allowFrom: [] },
+        groupPolicy: "allowlist",
+      },
+    } as unknown as ResolvedGoogleChatAccount;
+    const config = {
+      channels: {
+        googlechat: {
+          accounts: {
+            work: {
+              dm: { policy: "pairing", allowFrom: [] },
+            },
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const unregister = registerGoogleChatWebhookTarget({
+      account,
+      config,
+      runtime: {},
+      core,
+      path: "/googlechat",
+      mediaMaxMb: 5,
+    });
+
+    try {
+      const res = createMockServerResponse();
+      const handled = await handleGoogleChatWebhookRequest(
+        createWebhookRequest({
+          authorization: "Bearer test-token",
+          payload: {
+            type: "MESSAGE",
+            space: { name: "spaces/WORKDM", type: "DM" },
+            message: {
+              name: "spaces/WORKDM/messages/1",
+              text: "hello",
+              sender: {
+                name: "users/alice",
+                displayName: "Alice",
+                email: "alice@example.com",
+                type: "HUMAN",
+              },
+            },
+          },
+        }),
+        res,
+      );
+
+      expect(handled).toBe(true);
+      expect(res.statusCode).toBe(200);
+      await vi.waitFor(() => {
+        expect(readAllowFromStore).toHaveBeenCalledWith("googlechat", undefined, "work");
+      });
+      await vi.waitFor(() => {
+        expect(upsertPairingRequest).toHaveBeenCalledWith({
+          channel: "googlechat",
+          id: "users/alice",
+          accountId: "work",
+          meta: { name: "Alice", email: "alice@example.com" },
+        });
+      });
+    } finally {
+      unregister();
+    }
+  });
 });
