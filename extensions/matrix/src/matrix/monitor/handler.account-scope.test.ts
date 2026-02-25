@@ -39,8 +39,16 @@ describe("matrix handler pairing account scoping", () => {
       } as unknown as MatrixClient,
       core,
       cfg: {},
-      runtime: {},
-      logger: {},
+      runtime: {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
       logVerboseMessage: vi.fn(),
       allowFrom: [],
       roomsConfig: undefined,
