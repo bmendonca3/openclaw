@@ -1433,6 +1433,48 @@ describe("BlueBubbles webhook monitor", () => {
 
       expect(mockDispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalled();
     });
+
+    it("does not treat DM pairing-store entries as group allowlist entries", async () => {
+      const account = createMockAccount({
+        groupPolicy: "allowlist",
+        allowFrom: [],
+        groupAllowFrom: [],
+      });
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+      mockReadAllowFromStore.mockResolvedValue(["+15551234567"]);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const payload = {
+        type: "new-message",
+        data: {
+          text: "hello from paired sender",
+          handle: { address: "+15551234567" },
+          isGroup: true,
+          isFromMe: false,
+          guid: "msg-1",
+          chatGuid: "iMessage;+;chat123456",
+          date: Date.now(),
+        },
+      };
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", payload);
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      expect(mockReadAllowFromStore).toHaveBeenCalled();
+      expect(mockDispatchReplyWithBufferedBlockDispatcher).not.toHaveBeenCalled();
+    });
   });
 
   describe("mention gating (group messages)", () => {
@@ -2965,6 +3007,50 @@ describe("BlueBubbles webhook monitor", () => {
         expect.stringContaining("👍"),
         expect.any(Object),
       );
+    });
+
+    it("does not treat DM pairing-store entries as group reaction allowlist entries", async () => {
+      mockEnqueueSystemEvent.mockClear();
+
+      const account = createMockAccount({
+        groupPolicy: "allowlist",
+        allowFrom: [],
+        groupAllowFrom: [],
+      });
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+      mockReadAllowFromStore.mockResolvedValue(["+15551234567"]);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const payload = {
+        type: "message-reaction",
+        data: {
+          handle: { address: "+15551234567" },
+          isGroup: true,
+          isFromMe: false,
+          associatedMessageGuid: "msg-original-123",
+          associatedMessageType: 2000,
+          chatGuid: "iMessage;+;chat123456",
+          date: Date.now(),
+        },
+      };
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", payload);
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      expect(mockReadAllowFromStore).toHaveBeenCalled();
+      expect(mockEnqueueSystemEvent).not.toHaveBeenCalled();
     });
   });
 

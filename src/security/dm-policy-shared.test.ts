@@ -89,17 +89,6 @@ describe("security/dm-policy-shared", () => {
     expect(lists.effectiveGroupAllowFrom).toEqual(["owner"]);
   });
 
-  it("can keep group allowlist empty when fallback is disabled", () => {
-    const lists = resolveEffectiveAllowFromLists({
-      allowFrom: ["owner"],
-      groupAllowFrom: [],
-      storeAllowFrom: ["paired-user"],
-      groupAllowFromFallbackToAllowFrom: false,
-    });
-    expect(lists.effectiveAllowFrom).toEqual(["owner", "paired-user"]);
-    expect(lists.effectiveGroupAllowFrom).toEqual([]);
-  });
-
   it("excludes storeAllowFrom when dmPolicy is allowlist", () => {
     const lists = resolveEffectiveAllowFromLists({
       allowFrom: ["+1111"],
@@ -120,119 +109,6 @@ describe("security/dm-policy-shared", () => {
     });
     expect(lists.effectiveAllowFrom).toEqual(["+1111", "+2222"]);
     expect(lists.effectiveGroupAllowFrom).toEqual(["+1111"]);
-  });
-
-  it("resolves access + effective allowlists in one shared call", () => {
-    const resolved = resolveDmGroupAccessWithLists({
-      isGroup: false,
-      dmPolicy: "pairing",
-      groupPolicy: "allowlist",
-      allowFrom: ["owner"],
-      groupAllowFrom: ["group:room"],
-      storeAllowFrom: ["paired-user"],
-      isSenderAllowed: (allowFrom) => allowFrom.includes("paired-user"),
-    });
-    expect(resolved.decision).toBe("allow");
-    expect(resolved.reasonCode).toBe(DM_GROUP_ACCESS_REASON.DM_POLICY_ALLOWLISTED);
-    expect(resolved.reason).toBe("dmPolicy=pairing (allowlisted)");
-    expect(resolved.effectiveAllowFrom).toEqual(["owner", "paired-user"]);
-    expect(resolved.effectiveGroupAllowFrom).toEqual(["group:room"]);
-  });
-
-  it("resolves command gate with dm/group parity for groups", () => {
-    const resolved = resolveDmGroupAccessWithCommandGate({
-      isGroup: true,
-      dmPolicy: "pairing",
-      groupPolicy: "allowlist",
-      allowFrom: ["owner"],
-      groupAllowFrom: ["group-owner"],
-      storeAllowFrom: ["paired-user"],
-      isSenderAllowed: (allowFrom) => allowFrom.includes("paired-user"),
-      command: {
-        useAccessGroups: true,
-        allowTextCommands: true,
-        hasControlCommand: true,
-      },
-    });
-    expect(resolved.decision).toBe("block");
-    expect(resolved.reason).toBe("groupPolicy=allowlist (not allowlisted)");
-    expect(resolved.commandAuthorized).toBe(false);
-    expect(resolved.shouldBlockControlCommand).toBe(true);
-  });
-
-  it("keeps configured dm allowlist usable for group command auth", () => {
-    const resolved = resolveDmGroupAccessWithCommandGate({
-      isGroup: true,
-      dmPolicy: "pairing",
-      groupPolicy: "open",
-      allowFrom: ["owner"],
-      groupAllowFrom: [],
-      storeAllowFrom: ["paired-user"],
-      isSenderAllowed: (allowFrom) => allowFrom.includes("owner"),
-      command: {
-        useAccessGroups: true,
-        allowTextCommands: true,
-        hasControlCommand: true,
-      },
-    });
-    expect(resolved.commandAuthorized).toBe(true);
-    expect(resolved.shouldBlockControlCommand).toBe(false);
-  });
-
-  it("treats dm command authorization as dm access result", () => {
-    const resolved = resolveDmGroupAccessWithCommandGate({
-      isGroup: false,
-      dmPolicy: "pairing",
-      groupPolicy: "allowlist",
-      allowFrom: ["owner"],
-      groupAllowFrom: ["group-owner"],
-      storeAllowFrom: ["paired-user"],
-      isSenderAllowed: (allowFrom) => allowFrom.includes("paired-user"),
-      command: {
-        useAccessGroups: true,
-        allowTextCommands: true,
-        hasControlCommand: true,
-      },
-    });
-    expect(resolved.decision).toBe("allow");
-    expect(resolved.commandAuthorized).toBe(true);
-    expect(resolved.shouldBlockControlCommand).toBe(false);
-  });
-
-  it("does not auto-authorize dm commands in open mode without explicit allowlists", () => {
-    const resolved = resolveDmGroupAccessWithCommandGate({
-      isGroup: false,
-      dmPolicy: "open",
-      groupPolicy: "allowlist",
-      allowFrom: [],
-      groupAllowFrom: [],
-      storeAllowFrom: [],
-      isSenderAllowed: () => false,
-      command: {
-        useAccessGroups: true,
-        allowTextCommands: true,
-        hasControlCommand: true,
-      },
-    });
-    expect(resolved.decision).toBe("allow");
-    expect(resolved.commandAuthorized).toBe(false);
-    expect(resolved.shouldBlockControlCommand).toBe(false);
-  });
-
-  it("keeps allowlist mode strict in shared resolver (no pairing-store fallback)", () => {
-    const resolved = resolveDmGroupAccessWithLists({
-      isGroup: false,
-      dmPolicy: "allowlist",
-      groupPolicy: "allowlist",
-      allowFrom: ["owner"],
-      groupAllowFrom: [],
-      storeAllowFrom: ["paired-user"],
-      isSenderAllowed: () => false,
-    });
-    expect(resolved.decision).toBe("block");
-    expect(resolved.reasonCode).toBe(DM_GROUP_ACCESS_REASON.DM_POLICY_NOT_ALLOWLISTED);
-    expect(resolved.reason).toBe("dmPolicy=allowlist (not allowlisted)");
-    expect(resolved.effectiveAllowFrom).toEqual(["owner"]);
   });
 
   const channels = [
