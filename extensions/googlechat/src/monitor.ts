@@ -76,8 +76,13 @@ function pruneGoogleChatWebhookReplayCache(nowMs: number): void {
     }
   }
 
-  while (seenGoogleChatWebhookEvents.size > GOOGLECHAT_WEBHOOK_REPLAY_MAX_ENTRIES) {
-    const oldest = seenGoogleChatWebhookEvents.keys().next();
+  const overflow = seenGoogleChatWebhookEvents.size - GOOGLECHAT_WEBHOOK_REPLAY_MAX_ENTRIES;
+  if (overflow <= 0) {
+    return;
+  }
+  const oldestKeys = seenGoogleChatWebhookEvents.keys();
+  for (let index = 0; index < overflow; index += 1) {
+    const oldest = oldestKeys.next();
     if (oldest.done) {
       break;
     }
