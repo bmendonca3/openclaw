@@ -116,7 +116,9 @@ export async function handleIrcInbound(params: {
   const storeAllowFrom =
     dmPolicy === "allowlist"
       ? []
-      : await core.channel.pairing.readAllowFromStore(CHANNEL_ID).catch(() => []);
+      : await core.channel.pairing
+          .readAllowFromStore(CHANNEL_ID, undefined, account.accountId)
+          .catch(() => []);
   const storeAllowList = normalizeIrcAllowlist(storeAllowFrom);
 
   const groupMatch = resolveIrcGroupMatch({
@@ -195,6 +197,7 @@ export async function handleIrcInbound(params: {
           const { code, created } = await core.channel.pairing.upsertPairingRequest({
             channel: CHANNEL_ID,
             id: senderDisplay.toLowerCase(),
+            accountId: account.accountId,
             meta: { name: message.senderNick || undefined },
           });
           if (created) {
