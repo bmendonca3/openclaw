@@ -85,6 +85,23 @@ function registerTwoTargets() {
   };
 }
 
+function registerSingleTarget() {
+  const sink = vi.fn();
+  const core = {} as PluginRuntime;
+  const config = {} as OpenClawConfig;
+  const unregister = registerGoogleChatWebhookTarget({
+    account: baseAccount("single"),
+    config,
+    runtime: {},
+    core,
+    path: "/googlechat",
+    statusSink: sink,
+    mediaMaxMb: 5,
+  });
+
+  return { sink, unregister };
+}
+
 describe("Google Chat webhook routing", () => {
   it("rejects ambiguous routing when multiple targets on the same path verify successfully", async () => {
     vi.mocked(verifyGoogleChatRequest).mockResolvedValue({ ok: true });
@@ -131,6 +148,44 @@ describe("Google Chat webhook routing", () => {
       expect(res.statusCode).toBe(200);
       expect(sinkA).not.toHaveBeenCalled();
       expect(sinkB).toHaveBeenCalledTimes(1);
+    } finally {
+      unregister();
+    }
+  });
+
+  it("acknowledges replayed authorized events and skips duplicate side effects", async () => {
+    vi.mocked(verifyGoogleChatRequest).mockResolvedValue({ ok: true });
+    const { sink, unregister } = registerSingleTarget();
+    const payload = {
+      type: "ADDED_TO_SPACE",
+      eventTime: "2026-02-25T19:00:00.000Z",
+      space: { name: "spaces/replay" },
+      user: { name: "users/123" },
+    };
+
+    try {
+      const firstRes = createMockServerResponse();
+      const secondRes = createMockServerResponse();
+      const firstHandled = await handleGoogleChatWebhookRequest(
+        createWebhookRequest({
+          authorization: "Bearer test-token",
+          payload,
+        }),
+        firstRes,
+      );
+      const secondHandled = await handleGoogleChatWebhookRequest(
+        createWebhookRequest({
+          authorization: "Bearer test-token",
+          payload,
+        }),
+        secondRes,
+      );
+
+      expect(firstHandled).toBe(true);
+      expect(secondHandled).toBe(true);
+      expect(firstRes.statusCode).toBe(200);
+      expect(secondRes.statusCode).toBe(200);
+      expect(sink).toHaveBeenCalledTimes(1);
     } finally {
       unregister();
     }
