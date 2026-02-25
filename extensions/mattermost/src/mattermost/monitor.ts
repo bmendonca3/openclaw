@@ -134,6 +134,71 @@ function channelChatType(kind: ChatType): "direct" | "group" | "channel" {
   return "channel";
 }
 
+function normalizeAllowEntry(entry: string): string {
+  const trimmed = entry.trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed === "*") {
+    return "*";
+  }
+  return trimmed
+    .replace(/^(mattermost|user):/i, "")
+    .replace(/^@/, "")
+    .toLowerCase();
+}
+
+function normalizeAllowList(entries: Array<string | number>): string[] {
+  const normalized = entries.map((entry) => normalizeAllowEntry(String(entry))).filter(Boolean);
+  return Array.from(new Set(normalized));
+}
+
+function resolveMattermostEffectiveAllowlists(params: {
+  configAllowFrom: string[];
+  configGroupAllowFrom: string[];
+  storeAllowFrom: string[];
+}): {
+  effectiveAllowFrom: string[];
+  effectiveGroupAllowFrom: string[];
+} {
+  const effectiveAllowFrom = Array.from(
+    new Set([...params.configAllowFrom, ...params.storeAllowFrom]),
+  );
+  // Pairing-store entries come from DM approvals and must not widen group authorization.
+  const effectiveGroupAllowFrom = Array.from(
+    new Set(
+      params.configGroupAllowFrom.length > 0 ? params.configGroupAllowFrom : params.configAllowFrom,
+    ),
+  );
+  return { effectiveAllowFrom, effectiveGroupAllowFrom };
+}
+
+function isSenderAllowed(params: {
+  senderId: string;
+  senderName?: string;
+  allowFrom: string[];
+  allowNameMatching?: boolean;
+}): boolean {
+  const allowFrom = params.allowFrom;
+  if (allowFrom.length === 0) {
+    return false;
+  }
+  if (allowFrom.includes("*")) {
+    return true;
+  }
+  const normalizedSenderId = normalizeAllowEntry(params.senderId);
+  const normalizedSenderName = params.senderName ? normalizeAllowEntry(params.senderName) : "";
+  return allowFrom.some((entry) => {
+    if (entry === normalizedSenderId) {
+      return true;
+    }
+    if (params.allowNameMatching !== true) {
+      return false;
+    }
+    return normalizedSenderName ? entry === normalizedSenderName : false;
+  });
+}
+
 type MattermostMediaInfo = {
   path: string;
   contentType?: string;
@@ -365,31 +430,11 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     const normalizedGroupAllowFrom = normalizeMattermostAllowList(
       account.config.groupAllowFrom ?? [],
     );
-    const storeAllowFrom = normalizeMattermostAllowList(
-      await readStoreAllowFromForDmPolicy({
-        provider: "mattermost",
-        accountId: account.accountId,
-        dmPolicy,
-        readStore: pairing.readStoreForDmPolicy,
-      }),
-    );
-    const accessDecision = resolveDmGroupAccessWithLists({
-      isGroup: kind !== "direct",
-      dmPolicy,
-      groupPolicy,
-      allowFrom: normalizedAllowFrom,
-      groupAllowFrom: normalizedGroupAllowFrom,
+    const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveMattermostEffectiveAllowlists({
+      configAllowFrom,
+      configGroupAllowFrom,
       storeAllowFrom,
-      isSenderAllowed: (allowFrom) =>
-        isMattermostSenderAllowed({
-          senderId,
-          senderName,
-          allowFrom,
-          allowNameMatching,
-        }),
     });
-    const effectiveAllowFrom = accessDecision.effectiveAllowFrom;
-    const effectiveGroupAllowFrom = accessDecision.effectiveGroupAllowFrom;
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
       cfg,
       surface: "mattermost",
@@ -893,10 +938,24 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         logVerboseMessage(
           `mattermost: drop reaction (dmPolicy=${dmPolicy} sender=${userId} reason=${reactionAccess.reason})`,
         );
-      } else {
-        logVerboseMessage(
-          `mattermost: drop reaction (groupPolicy=${groupPolicy} sender=${userId} reason=${reactionAccess.reason} channel=${channelId})`,
-        );
+        const { effectiveGroupAllowFrom } = resolveMattermostEffectiveAllowlists({
+          configAllowFrom,
+          configGroupAllowFrom,
+          storeAllowFrom,
+        });
+        // Drop when allowlist is empty (same as normal message handler)
+        const allowed =
+          effectiveGroupAllowFrom.length > 0 &&
+          isSenderAllowed({
+            senderId: userId,
+            senderName,
+            allowFrom: effectiveGroupAllowFrom,
+            allowNameMatching,
+          });
+        if (!allowed) {
+          logVerboseMessage(`mattermost: drop reaction (groupPolicy=allowlist sender=${userId})`);
+          return;
+        }
       }
       return;
     }
@@ -1013,3 +1072,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     },
   });
 }
+
+export const __testing = {
+  resolveMattermostEffectiveAllowlists,
+};
