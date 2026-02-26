@@ -25,6 +25,43 @@ function createCfg(): OpenClawConfig {
   } as OpenClawConfig;
 }
 
+describe("telegramPlugin security warnings", () => {
+  it("warns when allowlist mode has no configured sender allowlist", async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          enabled: true,
+          botToken: "token",
+          groupPolicy: "allowlist",
+        },
+      },
+    } as OpenClawConfig;
+    const account = telegramPlugin.config.resolveAccount(cfg, "default");
+    const warnings = (await telegramPlugin.security?.collectWarnings?.({ account, cfg })) ?? [];
+    const warningText = warnings.join("\n");
+    expect(warningText).toContain(
+      'groupPolicy="allowlist" is active, but no sender allowlist is configured',
+    );
+    expect(warningText).toContain("channels.telegram.groupAllowFrom");
+  });
+
+  it("does not warn when sender allowlist entries exist", async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          enabled: true,
+          botToken: "token",
+          groupPolicy: "allowlist",
+          groupAllowFrom: ["123456"],
+        },
+      },
+    } as OpenClawConfig;
+    const account = telegramPlugin.config.resolveAccount(cfg, "default");
+    const warnings = (await telegramPlugin.security?.collectWarnings?.({ account, cfg })) ?? [];
+    expect(warnings).toEqual([]);
+  });
+});
+
 function createStartAccountCtx(params: {
   cfg: OpenClawConfig;
   accountId: string;

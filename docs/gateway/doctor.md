@@ -214,6 +214,10 @@ flagged as "extra."
 Doctor emits warnings when a provider is open to DMs without an allowlist, or
 when a policy is configured in a dangerous way.
 
+It also warns when Telegram group auth is fail-closed (`groupPolicy="allowlist"`)
+but no sender allowlist is configured, with migration guidance to set
+`channels.telegram.groupAllowFrom` (or per-group/topic `allowFrom`).
+
 ### 10) systemd linger (Linux)
 
 If running as a systemd user service, doctor ensures lingering is enabled so the

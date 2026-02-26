@@ -204,6 +204,34 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount, TelegramProb
         groupPolicy: account.config.groupPolicy,
         defaultGroupPolicy,
       });
+      const hasExplicitAllowEntries = (entries?: Array<string | number>): boolean =>
+        (entries ?? []).some((entry) => String(entry).trim().length > 0);
+      const hasGroupOrTopicAllowFrom = Object.values(account.config.groups ?? {}).some((group) => {
+        if (hasExplicitAllowEntries(group?.allowFrom)) {
+          return true;
+        }
+        return Object.values(group?.topics ?? {}).some((topic) =>
+          hasExplicitAllowEntries(topic?.allowFrom),
+        );
+      });
+      const hasOpenGroupOrTopicOverride = Object.values(account.config.groups ?? {}).some(
+        (group) =>
+          group?.groupPolicy === "open" ||
+          Object.values(group?.topics ?? {}).some((topic) => topic?.groupPolicy === "open"),
+      );
+      const hasSenderAllowlist =
+        hasExplicitAllowEntries(account.config.groupAllowFrom) ||
+        hasExplicitAllowEntries(account.config.allowFrom) ||
+        hasGroupOrTopicAllowFrom;
+      const useAccountPath = Boolean(cfg.channels?.telegram?.accounts?.[account.accountId]);
+      const basePath = useAccountPath
+        ? `channels.telegram.accounts.${account.accountId}`
+        : "channels.telegram";
+      if (groupPolicy === "allowlist" && !hasSenderAllowlist && !hasOpenGroupOrTopicOverride) {
+        return [
+          `- Telegram groups: groupPolicy="allowlist" is active, but no sender allowlist is configured; all group senders will be blocked. Configure ${basePath}.groupAllowFrom (or per-group/per-topic allowFrom) with numeric sender IDs.`,
+        ];
+      }
       if (groupPolicy !== "open") {
         return [];
       }
