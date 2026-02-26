@@ -28,10 +28,6 @@ function hasAccountConfigEntry(cfg: OpenClawConfig, accountId: string): boolean 
 }
 
 function collectTelegramGroupAllowlistUpgradeWarnings(cfg: OpenClawConfig): string[] {
-  if (!cfg.channels?.telegram) {
-    return [];
-  }
-
   const defaultGroupPolicy = resolveDefaultGroupPolicy(cfg);
   const warnings: string[] = [];
 

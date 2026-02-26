@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 
 const note = vi.hoisted(() => vi.fn());
@@ -14,6 +14,21 @@ import {
 } from "./doctor-breaking-checks.js";
 
 describe("doctor breaking-change upgrade checks", () => {
+  let prevTelegramToken: string | undefined;
+
+  beforeEach(() => {
+    prevTelegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+  });
+
+  afterEach(() => {
+    if (prevTelegramToken === undefined) {
+      delete process.env.TELEGRAM_BOT_TOKEN;
+    } else {
+      process.env.TELEGRAM_BOT_TOKEN = prevTelegramToken;
+    }
+  });
+
   it("registers breaking-change checks with metadata", () => {
     expect(DOCTOR_BREAKING_CHANGE_CHECKS.length).toBeGreaterThan(0);
     expect(DOCTOR_BREAKING_CHANGE_CHECKS[0]).toMatchObject({
@@ -37,6 +52,15 @@ describe("doctor breaking-change upgrade checks", () => {
     const warningText = warnings.join("\n");
     expect(warningText).toContain("[2026.2.25]");
     expect(warningText).toContain('groupPolicy resolves to "allowlist"');
+    expect(warningText).toContain("channels.telegram.groupAllowFrom");
+  });
+
+  it("warns for env-only telegram installs missing sender allowlist config", () => {
+    process.env.TELEGRAM_BOT_TOKEN = "token";
+
+    const warnings = collectBreakingChangeUpgradeWarnings({} as OpenClawConfig);
+    const warningText = warnings.join("\n");
+    expect(warningText).toContain('Telegram account "default"');
     expect(warningText).toContain("channels.telegram.groupAllowFrom");
   });
 
