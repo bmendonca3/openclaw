@@ -121,7 +121,7 @@ function makeCall(method: keyof typeof agentsHandlers, params: Record<string, un
 }
 
 function toPortablePath(p: string): string {
-  return p.replace(/\\/g, "/");
+  return p.replace(/\\/g, "/").replace(/^[A-Za-z]:/, "");
 }
 
 function createEnoentError() {
