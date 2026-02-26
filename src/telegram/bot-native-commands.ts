@@ -1,3 +1,4 @@
+import type { Message } from "@grammyjs/types";
 import type { Bot, Context } from "grammy";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import type { CommandArgs } from "../auto-reply/commands-registry.js";
@@ -69,7 +70,13 @@ import { buildInlineKeyboard } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
-type TelegramNativeCommandContext = Context & { match?: string };
+type TelegramNativeCommandContext = Context & {
+  match?: string;
+  channelPost?: Message;
+};
+
+const resolveCommandMessage = (ctx: TelegramNativeCommandContext) =>
+  (ctx.message ?? ctx.channelPost) as Message | undefined;
 
 type TelegramCommandAuthResult = {
   chatId: number;
@@ -135,7 +142,7 @@ type RegisterTelegramNativeCommandsParams = {
 };
 
 async function resolveTelegramCommandAuth(params: {
-  msg: NonNullable<TelegramNativeCommandContext["message"]>;
+  msg: Message;
   bot: Bot;
   cfg: OpenClawConfig;
   accountId: string;
@@ -165,6 +172,7 @@ async function resolveTelegramCommandAuth(params: {
   } = params;
   const chatId = msg.chat.id;
   const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
+  const isChannelPost = msg.chat.type === "channel";
   const messageThreadId = (msg as { message_thread_id?: number }).message_thread_id;
   const isForum = (msg.chat as { is_forum?: boolean }).is_forum === true;
   const groupAllowContext = await resolveTelegramGroupAllowFromContext({
@@ -183,8 +191,12 @@ async function resolveTelegramCommandAuth(params: {
     effectiveGroupAllow,
     hasGroupAllowOverride,
   } = groupAllowContext;
-  const senderId = msg.from?.id ? String(msg.from.id) : "";
-  const senderUsername = msg.from?.username ?? "";
+  const senderId = msg.from?.id
+    ? String(msg.from.id)
+    : msg.sender_chat?.id
+      ? String(msg.sender_chat.id)
+      : "";
+  const senderUsername = msg.from?.username ?? msg.sender_chat?.username ?? "";
 
   const sendAuthMessage = async (text: string) => {
     await withTelegramApiErrorLogging({
@@ -261,11 +273,15 @@ async function resolveTelegramCommandAuth(params: {
     senderId,
     senderUsername,
   });
-  const commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
-    useAccessGroups,
-    authorizers: [{ configured: dmAllow.hasEntries, allowed: senderAllowed }],
-    modeWhenAccessGroupsOff: "configured",
-  });
+  // channel_post updates do not carry a normal "from" user in many cases.
+  // Require explicit allowlist configuration for command execution in channels.
+  const commandAuthorized = isChannelPost
+    ? dmAllow.hasEntries && senderAllowed
+    : resolveCommandAuthorizedFromAuthorizers({
+        useAccessGroups,
+        authorizers: [{ configured: dmAllow.hasEntries, allowed: senderAllowed }],
+        modeWhenAccessGroupsOff: "configured",
+      });
   if (requireAuth && !commandAuthorized) {
     return await rejectNotAuthorized();
   }
@@ -382,7 +398,7 @@ export const registerTelegramNativeCommands = ({
   syncTelegramMenuCommands({ bot, runtime, commandsToRegister });
 
   const resolveCommandRuntimeContext = (params: {
-    msg: NonNullable<TelegramNativeCommandContext["message"]>;
+    msg: Message;
     isGroup: boolean;
     isForum: boolean;
     resolvedThreadId?: number;
@@ -442,7 +458,7 @@ export const registerTelegramNativeCommands = ({
       for (const command of nativeCommands) {
         const normalizedCommandName = normalizeTelegramCommandName(command.name);
         bot.command(normalizedCommandName, async (ctx: TelegramNativeCommandContext) => {
-          const msg = ctx.message;
+          const msg = resolveCommandMessage(ctx);
           if (!msg) {
             return;
           }
@@ -664,7 +680,7 @@ export const registerTelegramNativeCommands = ({
 
       for (const pluginCommand of pluginCatalog.commands) {
         bot.command(pluginCommand.command, async (ctx: TelegramNativeCommandContext) => {
-          const msg = ctx.message;
+          const msg = resolveCommandMessage(ctx);
           if (!msg) {
             return;
           }

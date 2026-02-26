@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ChannelGroupPolicy } from "../config/group-policy.js";
 import type { TelegramAccountConfig } from "../config/types.js";
@@ -23,6 +23,17 @@ vi.mock("../pairing/pairing-store.js", () => ({
 }));
 
 describe("registerTelegramNativeCommands (plugin auth)", () => {
+  beforeEach(() => {
+    getPluginCommandSpecs.mockReset();
+    matchPluginCommand.mockReset();
+    executePluginCommand.mockReset();
+    deliverReplies.mockReset();
+    getPluginCommandSpecs.mockReturnValue([]);
+    matchPluginCommand.mockReturnValue(null);
+    executePluginCommand.mockResolvedValue({ text: "ok" });
+    deliverReplies.mockResolvedValue({ delivered: true });
+  });
+
   it("does not register plugin commands in menu when native=false but keeps handlers available", () => {
     const specs = Array.from({ length: 101 }, (_, i) => ({
       name: `cmd_${i}`,
@@ -153,5 +164,145 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
       }),
     );
     expect(bot.api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("blocks requireAuth plugin commands from channel_post when allowFrom is not configured", async () => {
+    const command = {
+      name: "plugin",
+      description: "Plugin command",
+      requireAuth: true,
+      handler: vi.fn(),
+    } as const;
+
+    getPluginCommandSpecs.mockReturnValue([{ name: "plugin", description: "Plugin command" }]);
+    matchPluginCommand.mockReturnValue({ command, args: undefined });
+    executePluginCommand.mockResolvedValue({ text: "ok" });
+
+    const handlers: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const bot = {
+      api: {
+        setMyCommands: vi.fn().mockResolvedValue(undefined),
+        sendMessage: vi.fn(),
+      },
+      command: (name: string, handler: (ctx: unknown) => Promise<void>) => {
+        handlers[name] = handler;
+      },
+    } as const;
+
+    registerTelegramNativeCommands({
+      bot: bot as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
+      cfg: {} as OpenClawConfig,
+      runtime: {} as unknown as RuntimeEnv,
+      accountId: "default",
+      telegramCfg: {} as TelegramAccountConfig,
+      allowFrom: [],
+      groupAllowFrom: [],
+      replyToMode: "off",
+      textLimit: 4000,
+      useAccessGroups: false,
+      nativeEnabled: false,
+      nativeSkillsEnabled: false,
+      nativeDisabledExplicit: false,
+      resolveGroupPolicy: () =>
+        ({
+          allowlistEnabled: false,
+          allowed: true,
+        }) as ChannelGroupPolicy,
+      resolveTelegramGroupConfig: () => ({
+        groupConfig: undefined,
+        topicConfig: undefined,
+      }),
+      shouldSkipUpdate: () => false,
+      opts: { token: "token" },
+    });
+
+    await handlers.plugin?.({
+      channelPost: {
+        chat: { id: -100123, type: "channel" },
+        sender_chat: { id: -100123, type: "channel", title: "Ops" },
+        message_id: 42,
+        date: 123456,
+        text: "/plugin",
+      },
+      match: "",
+    });
+
+    expect(bot.api.sendMessage).toHaveBeenCalledWith(
+      -100123,
+      "You are not authorized to use this command.",
+    );
+    expect(executePluginCommand).not.toHaveBeenCalled();
+  });
+
+  it("allows requireAuth plugin commands from channel_post only with explicit wildcard allowFrom", async () => {
+    const command = {
+      name: "plugin",
+      description: "Plugin command",
+      requireAuth: true,
+      handler: vi.fn(),
+    } as const;
+
+    getPluginCommandSpecs.mockReturnValue([{ name: "plugin", description: "Plugin command" }]);
+    matchPluginCommand.mockReturnValue({ command, args: undefined });
+    executePluginCommand.mockResolvedValue({ text: "ok" });
+
+    const handlers: Record<string, (ctx: unknown) => Promise<void>> = {};
+    const bot = {
+      api: {
+        setMyCommands: vi.fn().mockResolvedValue(undefined),
+        sendMessage: vi.fn(),
+      },
+      command: (name: string, handler: (ctx: unknown) => Promise<void>) => {
+        handlers[name] = handler;
+      },
+    } as const;
+
+    registerTelegramNativeCommands({
+      bot: bot as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
+      cfg: {} as OpenClawConfig,
+      runtime: {} as unknown as RuntimeEnv,
+      accountId: "default",
+      telegramCfg: {} as TelegramAccountConfig,
+      allowFrom: ["*"],
+      groupAllowFrom: [],
+      replyToMode: "off",
+      textLimit: 4000,
+      useAccessGroups: false,
+      nativeEnabled: false,
+      nativeSkillsEnabled: false,
+      nativeDisabledExplicit: false,
+      resolveGroupPolicy: () =>
+        ({
+          allowlistEnabled: false,
+          allowed: true,
+        }) as ChannelGroupPolicy,
+      resolveTelegramGroupConfig: () => ({
+        groupConfig: undefined,
+        topicConfig: undefined,
+      }),
+      shouldSkipUpdate: () => false,
+      opts: { token: "token" },
+    });
+
+    await handlers.plugin?.({
+      channelPost: {
+        chat: { id: -100123, type: "channel" },
+        sender_chat: { id: -100123, type: "channel", title: "Ops" },
+        message_id: 42,
+        date: 123456,
+        text: "/plugin",
+      },
+      match: "",
+    });
+
+    expect(executePluginCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAuthorizedSender: true,
+      }),
+    );
+    expect(bot.api.sendMessage).not.toHaveBeenCalledWith(
+      -100123,
+      "You are not authorized to use this command.",
+    );
   });
 });
