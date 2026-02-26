@@ -77,6 +77,7 @@ cat ~/.openclaw/openclaw.json
 - Gateway runtime best-practice checks (Node vs Bun, version-manager paths).
 - Gateway port collision diagnostics (default `18789`).
 - Security warnings for open DM policies.
+- Breaking-change upgrade checks for known migration-sensitive config behavior.
 - Gateway auth warnings when no `gateway.auth.token` is set (local mode; offers token generation).
 - systemd linger check on Linux.
 - Source install checks (pnpm workspace mismatch, missing UI assets, missing tsx binary).
@@ -213,6 +214,14 @@ flagged as "extra."
 
 Doctor emits warnings when a provider is open to DMs without an allowlist, or
 when a policy is configured in a dangerous way.
+
+### 9b) Breaking-change upgrade checks
+
+Doctor runs a registry of breaking-change upgrade checks for known migration-sensitive
+config behavior and prints explicit fix paths/steps when issues are detected.
+
+Current checks include Telegram group sender allowlist migration guidance for
+`groupPolicy="allowlist"` installs missing sender allowlist entries.
 
 ### 10) systemd linger (Linux)
 

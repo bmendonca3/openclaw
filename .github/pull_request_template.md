@@ -92,6 +92,7 @@ What you personally verified (not just CI), and how:
 - Backward compatible? (`Yes/No`)
 - Config/env changes? (`Yes/No`)
 - Migration needed? (`Yes/No`)
+- If breaking: added/updated `openclaw doctor` upgrade warning/check? (`Yes/No/N/A`)
 - If yes, exact upgrade steps:
 
 ## Failure Recovery (if this breaks)
