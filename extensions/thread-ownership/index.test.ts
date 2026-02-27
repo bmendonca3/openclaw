@@ -105,7 +105,23 @@ describe("thread-ownership plugin", () => {
       expect(api.logger.info).toHaveBeenCalledWith(expect.stringContaining("cancelled send"));
     });
 
-    it("fails open on network error", async () => {
+    it("fails closed on unexpected ownership status", async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        new Response(JSON.stringify({ error: "forwarder unhealthy" }), { status: 503 }),
+      );
+
+      const result = await hooks.message_sending(
+        { content: "hello", metadata: { threadTs: "1234.5678", channelId: "C123" }, to: "C123" },
+        { channelId: "slack", conversationId: "C123" },
+      );
+
+      expect(result).toEqual({ cancel: true });
+      expect(api.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("unexpected status 503"),
+      );
+    });
+
+    it("fails closed on network error", async () => {
       vi.mocked(globalThis.fetch).mockRejectedValue(new Error("ECONNREFUSED"));
 
       const result = await hooks.message_sending(
@@ -113,7 +129,7 @@ describe("thread-ownership plugin", () => {
         { channelId: "slack", conversationId: "C123" },
       );
 
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ cancel: true });
       expect(api.logger.warn).toHaveBeenCalledWith(
         expect.stringContaining("ownership check failed"),
       );

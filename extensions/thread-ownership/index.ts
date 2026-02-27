@@ -123,11 +123,17 @@ export default function register(api: OpenClawPluginApi) {
         return { cancel: true };
       }
 
-      // Unexpected status — fail open.
-      api.logger.warn?.(`thread-ownership: unexpected status ${resp.status}, allowing send`);
+      // Fail closed: if ownership cannot be verified, block the send to prevent cross-agent leakage.
+      api.logger.warn?.(
+        `thread-ownership: unexpected status ${resp.status} for ${channelId}:${threadTs}, cancelling send`,
+      );
+      return { cancel: true };
     } catch (err) {
-      // Network error — fail open.
-      api.logger.warn?.(`thread-ownership: ownership check failed (${String(err)}), allowing send`);
+      // Fail closed on verifier failures: availability issues must not become authorization bypasses.
+      api.logger.warn?.(
+        `thread-ownership: ownership check failed (${String(err)}) for ${channelId}:${threadTs}, cancelling send`,
+      );
+      return { cancel: true };
     }
   });
 }
