@@ -166,9 +166,9 @@ export class CallManager {
       return;
     }
 
-    // Twilio has provider-specific state for speaking (<Say> fallback) and can
-    // fail for inbound calls; keep existing Twilio behavior unchanged.
-    if (this.provider.name === "twilio") {
+    // Twilio outbound calls already handle initial playback via provider-specific
+    // call setup. Inbound calls still need the normal speakInitialMessage path.
+    if (this.provider.name === "twilio" && call.direction !== "inbound") {
       return;
     }
 

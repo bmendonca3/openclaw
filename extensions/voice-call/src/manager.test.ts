@@ -134,6 +134,51 @@ describe("CallManager", () => {
     expect(provider.playTtsCalls[0]?.text).toBe("Hello there");
   });
 
+  it("speaks inboundGreeting on answered for Twilio inbound calls", async () => {
+    const provider = new FakeProvider("twilio");
+    const { manager } = createManagerHarness(
+      {
+        provider: "twilio",
+        inboundPolicy: "open",
+        inboundGreeting: "Welcome inbound",
+      },
+      provider,
+    );
+
+    manager.processEvent({
+      id: "evt-inbound-init",
+      type: "call.initiated",
+      callId: "inbound-call",
+      providerCallId: "provider-inbound",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+15550001111",
+      to: "+15550000000",
+    });
+
+    const inboundCall = manager.getCallByProviderCallId("provider-inbound");
+    expect(inboundCall?.metadata?.initialMessage).toBe("Welcome inbound");
+
+    manager.processEvent({
+      id: "evt-inbound-answer",
+      type: "call.answered",
+      callId: inboundCall?.callId ?? "inbound-call",
+      providerCallId: "provider-inbound",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+15550001111",
+      to: "+15550000000",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(provider.playTtsCalls).toHaveLength(1);
+    expect(provider.playTtsCalls[0]?.text).toBe("Welcome inbound");
+    expect(manager.getCallByProviderCallId("provider-inbound")?.metadata?.initialMessage).toBe(
+      undefined,
+    );
+  });
+
   it("rejects inbound calls with missing caller ID when allowlist enabled", () => {
     const { manager, provider } = createManagerHarness({
       inboundPolicy: "allowlist",
