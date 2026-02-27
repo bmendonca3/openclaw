@@ -19,6 +19,7 @@ import {
   shouldAckReaction as shouldAckReactionGate,
   type AckReactionScope,
 } from "../../../channels/ack-reactions.js";
+import { formatAllowlistMatchMeta } from "../../../channels/allowlist-match.js";
 import { resolveControlCommandGate } from "../../../channels/command-gating.js";
 import { resolveConversationLabel } from "../../../channels/conversation-label.js";
 import { logInboundDrop } from "../../../channels/logging.js";

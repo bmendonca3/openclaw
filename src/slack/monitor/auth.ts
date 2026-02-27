@@ -8,11 +8,18 @@ import {
 import { resolveSlackChannelConfig } from "./channel-config.js";
 import { normalizeSlackChannelType, type SlackMonitorContext } from "./context.js";
 
-export async function resolveSlackEffectiveAllowFrom(ctx: SlackMonitorContext) {
-  const storeAllowFrom =
-    ctx.dmPolicy === "allowlist"
-      ? []
-      : await readChannelAllowFromStore("slack", process.env, ctx.accountId).catch(() => []);
+export async function resolveSlackEffectiveAllowFrom(
+  ctx: SlackMonitorContext,
+  options?: { includePairingStore?: boolean },
+) {
+  const includePairingStore = options?.includePairingStore === true;
+  const storeAllowFrom = includePairingStore
+    ? await readStoreAllowFromForDmPolicy({
+        provider: "slack",
+        accountId: ctx.accountId,
+        dmPolicy: ctx.dmPolicy,
+      })
+    : [];
   const allowFrom = normalizeAllowList([...ctx.allowFrom, ...storeAllowFrom]);
   const allowFromLower = normalizeAllowListLower(allowFrom);
   return { allowFrom, allowFromLower };

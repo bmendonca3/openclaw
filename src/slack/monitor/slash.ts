@@ -326,14 +326,14 @@ export async function registerSlackMonitorSlashCommands(params: {
         return;
       }
 
-      const storeAllowFrom =
-        ctx.dmPolicy === "allowlist"
-          ? []
-          : await readChannelAllowFromStore("slack", process.env, account.accountId).catch(
-              () => [],
-            );
-      const effectiveAllowFrom = normalizeAllowList([...ctx.allowFrom, ...storeAllowFrom]);
-      const effectiveAllowFromLower = normalizeAllowListLower(effectiveAllowFrom);
+      const allowFromScope =
+        ctx.accountId === account.accountId ? ctx : { ...ctx, accountId: account.accountId };
+      const { allowFromLower: effectiveAllowFromLower } = await resolveSlackEffectiveAllowFrom(
+        allowFromScope,
+        {
+          includePairingStore: isDirectMessage,
+        },
+      );
 
       // Privileged command surface: compute CommandAuthorized, don't assume true.
       // Keep this aligned with the Slack message path (message-handler/prepare.ts).
@@ -342,7 +342,7 @@ export async function registerSlackMonitorSlashCommands(params: {
       if (isDirectMessage) {
         const allowed = await authorizeSlackDirectMessage({
           ctx,
-          accountId: ctx.accountId,
+          accountId: account.accountId,
           senderId: command.user_id,
           allowFromLower: effectiveAllowFromLower,
           resolveSenderName: ctx.resolveUserName,
@@ -371,51 +371,6 @@ export async function registerSlackMonitorSlashCommands(params: {
         });
         if (!allowed) {
           return;
-        }
-        if (ctx.dmPolicy !== "open") {
-          const sender = await ctx.resolveUserName(command.user_id);
-          const senderName = sender?.name ?? undefined;
-          const allowMatch = resolveSlackAllowListMatch({
-            allowList: effectiveAllowFromLower,
-            id: command.user_id,
-            name: senderName,
-            allowNameMatching: ctx.allowNameMatching,
-          });
-          const allowMatchMeta = formatAllowlistMatchMeta(allowMatch);
-          if (!allowMatch.allowed) {
-            if (ctx.dmPolicy === "pairing") {
-              const { code, created } = await upsertChannelPairingRequest({
-                channel: "slack",
-                id: command.user_id,
-                accountId: account.accountId,
-                meta: { name: senderName },
-              });
-              if (created) {
-                logVerbose(
-                  `slack pairing request sender=${command.user_id} name=${
-                    senderName ?? "unknown"
-                  } (${allowMatchMeta})`,
-                );
-                await respond({
-                  text: buildPairingReply({
-                    channel: "slack",
-                    idLine: `Your Slack user id: ${command.user_id}`,
-                    code,
-                  }),
-                  response_type: "ephemeral",
-                });
-              }
-            } else {
-              logVerbose(
-                `slack: blocked slash sender ${command.user_id} (dmPolicy=${ctx.dmPolicy}, ${allowMatchMeta})`,
-              );
-              await respond({
-                text: "You are not authorized to use this command.",
-                response_type: "ephemeral",
-              });
-            }
-            return;
-          }
         }
       }
 
