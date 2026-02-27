@@ -878,7 +878,7 @@ describe("slack slash commands access groups", () => {
     });
 
     expect(dispatchMock).not.toHaveBeenCalled();
-    expect(readAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "acct");
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("slack", process.env, "acct");
     expect(upsertPairingRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "slack",
