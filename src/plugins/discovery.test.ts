@@ -172,6 +172,42 @@ describe("discoverOpenClawPlugins", () => {
     const ids = candidates.map((c) => c.idHint);
     expect(ids).toContain("demo-plugin-dir");
   });
+
+  it("discovers symlinked package directories in scanned roots (pnpm-style global installs)", async () => {
+    const stateDir = makeTempDir();
+    const storePkg = path.join(stateDir, ".pnpm", "demo@1.0.0", "node_modules", "demo-plugin");
+    fs.mkdirSync(path.join(storePkg, "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(storePkg, "package.json"),
+      JSON.stringify({
+        name: "@openclaw/demo-plugin",
+        openclaw: { extensions: ["./src/index.ts"] },
+      }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(storePkg, "src", "index.ts"),
+      "export default function () {}",
+      "utf-8",
+    );
+
+    const globalExt = path.join(stateDir, "extensions");
+    fs.mkdirSync(globalExt, { recursive: true });
+    const linkedPkg = path.join(globalExt, "demo-plugin");
+    try {
+      fs.symlinkSync(storePkg, linkedPkg, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      return;
+    }
+
+    const { candidates } = await withStateDir(stateDir, async () => {
+      return discoverOpenClawPlugins({});
+    });
+
+    const ids = candidates.map((c) => c.idHint);
+    expect(ids).toContain("demo-plugin");
+  });
+
   it("blocks extension entries that escape package directory", async () => {
     const stateDir = makeTempDir();
     const globalExt = path.join(stateDir, "extensions", "escape-pack");
