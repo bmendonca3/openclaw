@@ -7,20 +7,7 @@ import type {
 // Grace period to keep resolved entries for late awaitDecision calls
 const RESOLVED_ENTRY_GRACE_MS = 15_000;
 
-export type ExecApprovalRequestPayload = {
-  command: string;
-  cwd?: string | null;
-  nodeId?: string | null;
-  host?: string | null;
-  security?: string | null;
-  ask?: string | null;
-  agentId?: string | null;
-  resolvedPath?: string | null;
-  sessionKey?: string | null;
-  env?: Record<string, string> | null;
-  runTimeoutMs?: number | null;
-  needsScreenRecording?: boolean | null;
-};
+export type ExecApprovalRequestPayload = InfraExecApprovalRequestPayload;
 
 export type ExecApprovalRecord = {
   id: string;

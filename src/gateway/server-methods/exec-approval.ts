@@ -76,7 +76,6 @@ export function createExecApprovalHandlers(
         id?: string;
         command: string;
         commandArgv?: string[];
-        env?: Record<string, string>;
         cwd?: string;
         systemRunPlanV2?: unknown;
         nodeId?: string;
@@ -86,6 +85,10 @@ export function createExecApprovalHandlers(
         agentId?: string;
         resolvedPath?: string;
         sessionKey?: string;
+        turnSourceChannel?: string;
+        turnSourceTo?: string;
+        turnSourceAccountId?: string;
+        turnSourceThreadId?: string | number;
         env?: Record<string, string> | null;
         runTimeoutMs?: number | null;
         needsScreenRecording?: boolean | null;
@@ -162,7 +165,13 @@ export function createExecApprovalHandlers(
         ask: p.ask ?? null,
         agentId: effectiveAgentId ?? null,
         resolvedPath: p.resolvedPath ?? null,
-        sessionKey: p.sessionKey ?? null,
+        sessionKey: effectiveSessionKey ?? null,
+        turnSourceChannel:
+          typeof p.turnSourceChannel === "string" ? p.turnSourceChannel.trim() || null : null,
+        turnSourceTo: typeof p.turnSourceTo === "string" ? p.turnSourceTo.trim() || null : null,
+        turnSourceAccountId:
+          typeof p.turnSourceAccountId === "string" ? p.turnSourceAccountId.trim() || null : null,
+        turnSourceThreadId: p.turnSourceThreadId ?? null,
         env: normalizeApprovalRequestEnv(p.env),
         runTimeoutMs: normalizeApprovalRequestRunTimeoutMs(p.runTimeoutMs),
         needsScreenRecording: normalizeApprovalRequestNeedsScreenRecording(p.needsScreenRecording),

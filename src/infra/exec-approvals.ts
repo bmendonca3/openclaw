@@ -44,6 +44,9 @@ export type ExecApprovalRequestPayload = {
   agentId?: string | null;
   resolvedPath?: string | null;
   sessionKey?: string | null;
+  env?: Record<string, string> | null;
+  runTimeoutMs?: number | null;
+  needsScreenRecording?: boolean | null;
   turnSourceChannel?: string | null;
   turnSourceTo?: string | null;
   turnSourceAccountId?: string | null;
@@ -52,20 +55,7 @@ export type ExecApprovalRequestPayload = {
 
 export type ExecApprovalRequest = {
   id: string;
-  request: {
-    command: string;
-    cwd?: string | null;
-    nodeId?: string | null;
-    host?: string | null;
-    security?: string | null;
-    ask?: string | null;
-    agentId?: string | null;
-    resolvedPath?: string | null;
-    sessionKey?: string | null;
-    env?: Record<string, string> | null;
-    runTimeoutMs?: number | null;
-    needsScreenRecording?: boolean | null;
-  };
+  request: ExecApprovalRequestPayload;
   createdAtMs: number;
   expiresAtMs: number;
 };

@@ -1,8 +1,5 @@
 import { describe, expect, test } from "vitest";
-import {
-  buildSystemRunApprovalBindingV1,
-  buildSystemRunApprovalEnvBinding,
-} from "../infra/system-run-approval-binding.js";
+import { buildSystemRunApprovalBindingV1 } from "../infra/system-run-approval-binding.js";
 import { ExecApprovalManager, type ExecApprovalRecord } from "./exec-approval-manager.js";
 import { sanitizeSystemRunParamsForForwarding } from "./node-invoke-system-run-approval.js";
 
@@ -202,6 +199,13 @@ describe("sanitizeSystemRunParamsForForwarding", () => {
       FOO: "bar",
       GIT_CONFIG_GLOBAL: "/tmp/payload",
     };
+    record.request.systemRunBindingV1 = buildSystemRunApprovalBindingV1({
+      argv: ["echo", "SAFE"],
+      cwd: null,
+      agentId: null,
+      sessionKey: null,
+      env: record.request.env,
+    }).binding;
     record.request.runTimeoutMs = 600_000;
     record.request.needsScreenRecording = false;
     const result = sanitizeSystemRunParamsForForwarding({
