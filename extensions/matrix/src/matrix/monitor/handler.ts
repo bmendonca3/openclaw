@@ -227,13 +227,12 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       }
 
       const senderName = await getMemberDisplayName(roomId, senderId);
-      const storeAllowFrom =
-        dmPolicy === "allowlist"
-          ? []
-          : await core.channel.pairing
-              .readAllowFromStore("matrix", undefined, accountId ?? undefined)
-              .catch(() => []);
-      const effectiveAllowFrom = normalizeMatrixAllowList([...allowFrom, ...storeAllowFrom]);
+      const senderUsername = resolveMatrixSenderUsername(senderId);
+      const senderLabel = resolveMatrixInboundSenderLabel({
+        senderName,
+        senderId,
+        senderUsername,
+      });
       const groupAllowFrom = cfg.channels?.matrix?.groupAllowFrom ?? [];
       const { access, effectiveAllowFrom, effectiveGroupAllowFrom, groupAllowConfigured } =
         await resolveMatrixAccessState({
@@ -263,50 +262,6 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         });
         if (!allowedDirectMessage) {
           return;
-        }
-        if (dmPolicy !== "open") {
-          const allowMatch = resolveMatrixAllowListMatch({
-            allowList: effectiveAllowFrom,
-            userId: senderId,
-          });
-          const allowMatchMeta = formatAllowlistMatchMeta(allowMatch);
-          if (!allowMatch.allowed) {
-            if (dmPolicy === "pairing") {
-              const { code, created } = await core.channel.pairing.upsertPairingRequest({
-                channel: "matrix",
-                id: senderId,
-                accountId: accountId ?? undefined,
-                meta: { name: senderName },
-              });
-              if (created) {
-                logVerboseMessage(
-                  `matrix pairing request sender=${senderId} name=${senderName ?? "unknown"} (${allowMatchMeta})`,
-                );
-                try {
-                  await sendMessageMatrix(
-                    `room:${roomId}`,
-                    [
-                      "OpenClaw: access not configured.",
-                      "",
-                      `Pairing code: ${code}`,
-                      "",
-                      "Ask the bot owner to approve with:",
-                      "openclaw pairing approve matrix <code>",
-                    ].join("\n"),
-                    { client },
-                  );
-                } catch (err) {
-                  logVerboseMessage(`matrix pairing reply failed for ${senderId}: ${String(err)}`);
-                }
-              }
-            }
-            if (dmPolicy !== "pairing") {
-              logVerboseMessage(
-                `matrix: blocked dm sender ${senderId} (dmPolicy=${dmPolicy}, ${allowMatchMeta})`,
-              );
-            }
-            return;
-          }
         }
       }
 

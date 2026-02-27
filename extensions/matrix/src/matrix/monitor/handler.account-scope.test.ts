@@ -87,7 +87,10 @@ describe("matrix handler pairing account scoping", () => {
 
     await handler("!dm:example.org", event);
 
-    expect(readAllowFromStore).toHaveBeenCalledWith("matrix", undefined, "work");
+    expect(readAllowFromStore).toHaveBeenCalledWith({
+      channel: "matrix",
+      accountId: "work",
+    });
     expect(upsertPairingRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "matrix",
