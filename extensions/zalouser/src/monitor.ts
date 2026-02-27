@@ -231,8 +231,7 @@ async function processMessage(
     configuredAllowFrom: configAllowFrom,
     senderId,
     isSenderAllowed,
-    readAllowFromStore: () =>
-      core.channel.pairing.readAllowFromStore("zalouser", undefined, account.accountId),
+    readAllowFromStore: pairing.readAllowFromStore,
     shouldComputeCommandAuthorized: (body, cfg) =>
       core.channel.commands.shouldComputeCommandAuthorized(body, cfg),
     resolveCommandAuthorizedFromAuthorizers: (params) =>
@@ -252,7 +251,6 @@ async function processMessage(
         if (dmPolicy === "pairing") {
           const { code, created } = await pairing.upsertPairingRequest({
             id: senderId,
-            accountId: account.accountId,
             meta: { name: senderName || undefined },
           });
 
