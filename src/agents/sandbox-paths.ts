@@ -1,8 +1,9 @@
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { assertNoPathAliasEscape, type PathAliasPolicy } from "../infra/path-alias-guards.js";
-import { isPathInside } from "../infra/path-guards.js";
+import { isNotFoundPathError, isPathInside } from "../infra/path-guards.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
@@ -61,8 +62,8 @@ export async function assertSandboxPath(params: {
   filePath: string;
   cwd: string;
   root: string;
-  allowFinalSymlink?: boolean;
-  allowFinalHardlink?: boolean;
+  allowFinalSymlinkForUnlink?: boolean;
+  allowFinalHardlinkForUnlink?: boolean;
 }) {
   const resolved = resolveSandboxPath(params);
   const policy: PathAliasPolicy = {
@@ -75,7 +76,7 @@ export async function assertSandboxPath(params: {
     boundaryLabel: "sandbox root",
     policy,
   });
-  if (!params.allowFinalHardlink) {
+  if (!params.allowFinalHardlinkForUnlink) {
     await assertNoHardlinkedFinalPath(resolved.resolved, path.resolve(params.root), {
       rootLabel: "sandbox root",
     });

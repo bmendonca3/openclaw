@@ -297,8 +297,8 @@ async function resolvePatchPath(
         filePath: resolved.hostPath,
         cwd: options.cwd,
         root: options.cwd,
-        allowFinalSymlink: purpose === "unlink",
-        allowFinalHardlink: purpose === "unlink",
+        allowFinalSymlinkForUnlink: aliasPolicy.allowFinalSymlinkForUnlink,
+        allowFinalHardlinkForUnlink: aliasPolicy.allowFinalHardlinkForUnlink,
       });
     }
     return {
@@ -314,8 +314,8 @@ async function resolvePatchPath(
           filePath,
           cwd: options.cwd,
           root: options.cwd,
-          allowFinalSymlink: purpose === "unlink",
-          allowFinalHardlink: purpose === "unlink",
+          allowFinalSymlinkForUnlink: aliasPolicy.allowFinalSymlinkForUnlink,
+          allowFinalHardlinkForUnlink: aliasPolicy.allowFinalHardlinkForUnlink,
         })
       ).resolved
     : resolvePathFromCwd(filePath, options.cwd);
