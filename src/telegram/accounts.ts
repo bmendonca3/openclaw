@@ -39,15 +39,17 @@ export type ResolvedTelegramAccount = {
 
 function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
   const accounts = cfg.channels?.telegram?.accounts;
-  if (!accounts || typeof accounts !== "object") {
-    return [];
-  }
   const ids = new Set<string>();
-  for (const key of Object.keys(accounts)) {
-    if (!key) {
-      continue;
+  if (accounts && typeof accounts === "object") {
+    for (const key of Object.keys(accounts)) {
+      if (!key) {
+        continue;
+      }
+      ids.add(normalizeAccountId(key));
     }
-    ids.add(normalizeAccountId(key));
+  }
+  if (resolveTelegramToken(cfg, { accountId: DEFAULT_ACCOUNT_ID }).source !== "none") {
+    ids.add(DEFAULT_ACCOUNT_ID);
   }
   return [...ids];
 }

@@ -98,6 +98,35 @@ describe("resolveTelegramAccount", () => {
     expect(lines).toContain("listTelegramAccountIds [ 'work' ]");
     expect(lines).toContain("resolve { accountId: 'work', enabled: true, tokenSource: 'config' }");
   });
+
+  it("keeps the default account in the polling list when a top-level bot token is configured", () => {
+    withEnv({ TELEGRAM_BOT_TOKEN: "" }, () => {
+      const cfg: OpenClawConfig = {
+        channels: {
+          telegram: {
+            botToken: "tok-default",
+            accounts: { alerts: { botToken: "tok-alerts" } },
+          },
+        },
+      };
+
+      expect(listTelegramAccountIds(cfg)).toEqual(["alerts", "default"]);
+    });
+  });
+
+  it("keeps the default account in the polling list when TELEGRAM_BOT_TOKEN is set", () => {
+    withEnv({ TELEGRAM_BOT_TOKEN: "tok-env" }, () => {
+      const cfg: OpenClawConfig = {
+        channels: {
+          telegram: {
+            accounts: { alerts: { botToken: "tok-alerts" } },
+          },
+        },
+      };
+
+      expect(listTelegramAccountIds(cfg)).toEqual(["alerts", "default"]);
+    });
+  });
 });
 
 describe("resolveTelegramAccount allowFrom precedence", () => {
