@@ -12,7 +12,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
     const result = await sendMessageFeishu({ cfg, to, text, accountId: accountId ?? undefined });
     return { channel: "feishu", ...result };
   },
-  sendMedia: async ({ cfg, to, text, mediaUrl, accountId }) => {
+  sendMedia: async ({ cfg, to, text, mediaUrl, mediaLocalRoots, accountId }) => {
     // Send text first if provided
     if (text?.trim()) {
       await sendMessageFeishu({ cfg, to, text, accountId: accountId ?? undefined });
@@ -25,6 +25,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
           cfg,
           to,
           mediaUrl,
+          localRoots: mediaLocalRoots,
           accountId: accountId ?? undefined,
         });
         return { channel: "feishu", ...result };

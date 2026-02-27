@@ -209,6 +209,26 @@ describe("sendMediaFeishu msg_type routing", () => {
     expect(messageReplyMock).not.toHaveBeenCalled();
   });
 
+  it("forwards explicit localRoots when loading local media URLs", async () => {
+    const localRoots = ["/tmp/workspace-clawdy"];
+
+    await sendMediaFeishu({
+      cfg: {} as any,
+      to: "user:ou_target",
+      mediaUrl: "/tmp/workspace-clawdy/tmp/render.opus",
+      localRoots,
+    });
+
+    expect(loadWebMediaMock).toHaveBeenCalledWith(
+      "/tmp/workspace-clawdy/tmp/render.opus",
+      expect.objectContaining({
+        maxBytes: 30 * 1024 * 1024,
+        optimizeImages: false,
+        localRoots,
+      }),
+    );
+  });
+
   it("uses isolated temp paths for image downloads", async () => {
     const imageKey = "img_v3_01abc123";
     let capturedPath: string | undefined;
