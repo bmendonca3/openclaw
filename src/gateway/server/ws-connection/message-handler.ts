@@ -226,10 +226,6 @@ function rawDataByteLength(data: WebSocket.RawData): number {
         total += chunk.byteLength;
         continue;
       }
-      if (chunk instanceof ArrayBuffer) {
-        total += chunk.byteLength;
-        continue;
-      }
       total += Buffer.byteLength(String(chunk), "utf8");
     }
     return total;
