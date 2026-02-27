@@ -31,18 +31,18 @@ function makeAccount(
 function makeReq(method: string, body: string): IncomingMessage {
   const req = new EventEmitter() as IncomingMessage & {
     destroyed: boolean;
-    destroy: () => void;
   };
   req.method = method;
   req.headers = {};
   req.socket = { remoteAddress: "127.0.0.1" } as any;
   req.destroyed = false;
-  req.destroy = () => {
+  req.destroy = ((_: Error | undefined) => {
     if (req.destroyed) {
-      return;
+      return req;
     }
     req.destroyed = true;
-  };
+    return req;
+  }) as IncomingMessage["destroy"];
 
   // Simulate body delivery
   process.nextTick(() => {
@@ -59,18 +59,18 @@ function makeReq(method: string, body: string): IncomingMessage {
 function makeStalledReq(method: string): IncomingMessage {
   const req = new EventEmitter() as IncomingMessage & {
     destroyed: boolean;
-    destroy: () => void;
   };
   req.method = method;
   req.headers = {};
   req.socket = { remoteAddress: "127.0.0.1" } as any;
   req.destroyed = false;
-  req.destroy = () => {
+  req.destroy = ((_: Error | undefined) => {
     if (req.destroyed) {
-      return;
+      return req;
     }
     req.destroyed = true;
-  };
+    return req;
+  }) as IncomingMessage["destroy"];
   return req;
 }
 
