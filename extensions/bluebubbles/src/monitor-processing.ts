@@ -508,13 +508,10 @@ export async function processMessage(
 
   const dmPolicy = account.config.dmPolicy ?? "pairing";
   const groupPolicy = account.config.groupPolicy ?? "allowlist";
-  const storeAllowFrom = await core.channel.pairing
-    .readAllowFromStore("bluebubbles", undefined, account.accountId)
-    .catch(() => []);
-  const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveEffectiveAllowFromLists({
-    allowFrom: account.config.allowFrom,
-    groupAllowFrom: account.config.groupAllowFrom,
-    storeAllowFrom,
+  const configuredAllowFrom = (account.config.allowFrom ?? []).map((entry) => String(entry));
+  const storeAllowFrom = await readStoreAllowFromForDmPolicy({
+    provider: "bluebubbles",
+    accountId: account.accountId,
     dmPolicy,
     readStore: pairing.readStoreForDmPolicy,
   });
@@ -599,7 +596,6 @@ export async function processMessage(
     if (accessDecision.decision === "pairing") {
       const { code, created } = await pairing.upsertPairingRequest({
         id: message.senderId,
-        accountId: account.accountId,
         meta: { name: message.senderName },
       });
       runtime.log?.(`[bluebubbles] pairing request sender=${message.senderId} created=${created}`);
@@ -1402,13 +1398,9 @@ export async function processReaction(
 
   const dmPolicy = account.config.dmPolicy ?? "pairing";
   const groupPolicy = account.config.groupPolicy ?? "allowlist";
-  const storeAllowFrom = await core.channel.pairing
-    .readAllowFromStore("bluebubbles", undefined, account.accountId)
-    .catch(() => []);
-  const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveEffectiveAllowFromLists({
-    allowFrom: account.config.allowFrom,
-    groupAllowFrom: account.config.groupAllowFrom,
-    storeAllowFrom,
+  const storeAllowFrom = await readStoreAllowFromForDmPolicy({
+    provider: "bluebubbles",
+    accountId: account.accountId,
     dmPolicy,
     readStore: pairing.readStoreForDmPolicy,
   });

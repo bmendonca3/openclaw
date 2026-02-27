@@ -1160,7 +1160,10 @@ describe("BlueBubbles webhook monitor", () => {
       await handleBlueBubblesWebhookRequest(req, res);
       await flushAsync();
 
-      expect(mockReadAllowFromStore).toHaveBeenCalledWith("bluebubbles", undefined, "work");
+      expect(mockReadAllowFromStore).toHaveBeenCalledWith({
+        channel: "bluebubbles",
+        accountId: "work",
+      });
       expect(mockDispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalled();
     });
 
@@ -2901,7 +2904,10 @@ describe("BlueBubbles webhook monitor", () => {
       await handleBlueBubblesWebhookRequest(req, res);
       await flushAsync();
 
-      expect(mockReadAllowFromStore).toHaveBeenCalledWith("bluebubbles", undefined, "work");
+      expect(mockReadAllowFromStore).toHaveBeenCalledWith({
+        channel: "bluebubbles",
+        accountId: "work",
+      });
     });
 
     it("drops DM reactions when dmPolicy=pairing and allowFrom is empty", async () => {
