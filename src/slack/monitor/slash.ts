@@ -326,15 +326,14 @@ export async function registerSlackMonitorSlashCommands(params: {
         return;
       }
 
-      const storeAllowFrom =
-        ctx.dmPolicy === "allowlist"
-          ? []
-          : await readChannelAllowFromStore("slack").catch(() => []);
-      const effectiveAllowFrom = normalizeAllowList([...ctx.allowFrom, ...storeAllowFrom]);
-      const effectiveAllowFromLower = normalizeAllowListLower(effectiveAllowFrom);
-      const ownerAllowFromLower = isRoomish
-        ? normalizeAllowListLower(normalizeAllowList(ctx.allowFrom))
-        : effectiveAllowFromLower;
+      const allowFromScope =
+        ctx.accountId === account.accountId ? ctx : { ...ctx, accountId: account.accountId };
+      const { allowFromLower: effectiveAllowFromLower } = await resolveSlackEffectiveAllowFrom(
+        allowFromScope,
+        {
+          includePairingStore: isDirectMessage,
+        },
+      );
 
       // Privileged command surface: compute CommandAuthorized, don't assume true.
       // Keep this aligned with the Slack message path (message-handler/prepare.ts).
@@ -343,7 +342,7 @@ export async function registerSlackMonitorSlashCommands(params: {
       if (isDirectMessage) {
         const allowed = await authorizeSlackDirectMessage({
           ctx,
-          accountId: ctx.accountId,
+          accountId: account.accountId,
           senderId: command.user_id,
           allowFromLower: effectiveAllowFromLower,
           resolveSenderName: ctx.resolveUserName,
@@ -434,7 +433,7 @@ export async function registerSlackMonitorSlashCommands(params: {
       }
 
       const ownerAllowed = resolveSlackAllowListMatch({
-        allowList: ownerAllowFromLower,
+        allowList: effectiveAllowFromLower,
         id: command.user_id,
         name: senderName,
         allowNameMatching: ctx.allowNameMatching,
@@ -443,14 +442,14 @@ export async function registerSlackMonitorSlashCommands(params: {
       // CommandAuthorized based on allowlists/access-groups (downstream decides which commands need it).
       commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
         useAccessGroups: ctx.useAccessGroups,
-        authorizers: [{ configured: ownerAllowFromLower.length > 0, allowed: ownerAllowed }],
+        authorizers: [{ configured: effectiveAllowFromLower.length > 0, allowed: ownerAllowed }],
         modeWhenAccessGroupsOff: "configured",
       });
       if (isRoomish) {
         commandAuthorized = resolveCommandAuthorizedFromAuthorizers({
           useAccessGroups: ctx.useAccessGroups,
           authorizers: [
-            { configured: ownerAllowFromLower.length > 0, allowed: ownerAllowed },
+            { configured: effectiveAllowFromLower.length > 0, allowed: ownerAllowed },
             { configured: channelUsersAllowlistConfigured, allowed: channelUserAllowed },
           ],
           modeWhenAccessGroupsOff: "configured",
