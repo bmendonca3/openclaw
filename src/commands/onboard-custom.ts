@@ -3,6 +3,7 @@ import { buildModelAliasIndex, modelKey } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelProviderConfig } from "../config/types.models.js";
 import { isSecretRef, type SecretInput } from "../config/types.secrets.js";
+import { isPrivateOrLoopbackUrl } from "../gateway/net.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { fetchWithTimeout } from "../utils/fetch-timeout.js";
 import {
@@ -18,7 +19,8 @@ import type { SecretInputMode } from "./onboard-types.js";
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_CONTEXT_WINDOW = 4096;
 const DEFAULT_MAX_TOKENS = 4096;
-const VERIFY_TIMEOUT_MS = 30_000;
+const VERIFY_TIMEOUT_REMOTE_MS = 30_000;
+const VERIFY_TIMEOUT_LOCAL_MS = 120_000;
 
 /**
  * Detects if a URL is from Azure AI Foundry or Azure OpenAI.
@@ -282,6 +284,9 @@ async function requestVerification(params: {
   headers: Record<string, string>;
   body: Record<string, unknown>;
 }): Promise<VerificationResult> {
+  const timeoutMs = isPrivateOrLoopbackUrl(params.endpoint)
+    ? VERIFY_TIMEOUT_LOCAL_MS
+    : VERIFY_TIMEOUT_REMOTE_MS;
   try {
     const res = await fetchWithTimeout(
       params.endpoint,
@@ -293,7 +298,7 @@ async function requestVerification(params: {
         },
         body: JSON.stringify(params.body),
       },
-      VERIFY_TIMEOUT_MS,
+      timeoutMs,
     );
     return { ok: res.ok, status: res.status };
   } catch (error) {

@@ -2,7 +2,9 @@ import os from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isLocalishHost,
+  isPrivateOrLoopbackHost,
   isPrivateOrLoopbackAddress,
+  isPrivateOrLoopbackUrl,
   isSecureWebSocketUrl,
   isTrustedProxyAddress,
   pickPrimaryLanIPv4,
@@ -44,6 +46,32 @@ describe("isLocalishHost", () => {
     for (const host of rejected) {
       expect(isLocalishHost(host), host).toBe(false);
     }
+  });
+});
+
+describe("isPrivateOrLoopbackHost", () => {
+  it("accepts loopback, private IPs, and docker host aliases", () => {
+    const accepted = ["localhost", "127.0.0.1", "172.17.0.1", "10.0.0.8", "host.docker.internal"];
+    for (const host of accepted) {
+      expect(isPrivateOrLoopbackHost(host), host).toBe(true);
+    }
+  });
+
+  it("rejects public hosts", () => {
+    const rejected = ["example.com", "203.0.113.5"];
+    for (const host of rejected) {
+      expect(isPrivateOrLoopbackHost(host), host).toBe(false);
+    }
+  });
+});
+
+describe("isPrivateOrLoopbackUrl", () => {
+  it("classifies local and private endpoint urls", () => {
+    expect(isPrivateOrLoopbackUrl("http://localhost:11434/v1")).toBe(true);
+    expect(isPrivateOrLoopbackUrl("http://127.0.0.1:11434/v1")).toBe(true);
+    expect(isPrivateOrLoopbackUrl("http://172.17.0.1:11434/v1")).toBe(true);
+    expect(isPrivateOrLoopbackUrl("http://host.docker.internal:11434/v1")).toBe(true);
+    expect(isPrivateOrLoopbackUrl("https://example.com/v1")).toBe(false);
   });
 });
 

@@ -335,6 +335,34 @@ export function isLoopbackHost(host: string): boolean {
 }
 
 /**
+ * Check if a host points at loopback, a private-network IP, or a common local
+ * host alias that should be treated like a self-hosted endpoint.
+ */
+export function isPrivateOrLoopbackHost(host: string): boolean {
+  if (!host) {
+    return false;
+  }
+  const normalized = resolveHostName(host);
+  if (!normalized) {
+    return false;
+  }
+  const lower = normalized.toLowerCase();
+  if (lower === "host.docker.internal") {
+    return true;
+  }
+  return isLoopbackHost(lower) || isPrivateOrLoopbackAddress(lower);
+}
+
+export function isPrivateOrLoopbackUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return isPrivateOrLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Local-facing host check for inbound requests:
  * - loopback hosts (localhost/127.x/::1 and mapped forms)
  * - Tailscale Serve/Funnel hostnames (*.ts.net)

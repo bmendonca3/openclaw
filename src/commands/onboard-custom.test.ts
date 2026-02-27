@@ -53,6 +53,19 @@ function stubFetchSequence(
   return fetchMock;
 }
 
+function stubAbortableFetchWithRetry(): ReturnType<typeof vi.fn> {
+  const fetchMock = vi
+    .fn()
+    .mockImplementationOnce((_url: string, init?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("AbortError")));
+      });
+    })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 async function runPromptCustomApi(
   prompter: ReturnType<typeof createTestPrompter>,
   config: object = {},
@@ -204,7 +217,7 @@ describe("promptCustomApiConfig", () => {
   it("aborts verification after timeout", async () => {
     vi.useFakeTimers();
     const prompter = createTestPrompter({
-      text: ["http://localhost:11434/v1", "", "slow-model", "fast-model", "custom", ""],
+      text: ["https://example.com/v1", "test-key", "slow-model", "fast-model", "custom", ""],
       select: ["plaintext", "openai", "model"],
     });
 
@@ -223,6 +236,51 @@ describe("promptCustomApiConfig", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     await promise;
 
+    expect(prompter.text).toHaveBeenCalledTimes(6);
+  });
+
+  it.each([
+    "http://localhost:11434/v1",
+    "http://127.0.0.1:11434/v1",
+    "http://172.17.0.1:11434/v1",
+    "http://host.docker.internal:11434/v1",
+  ])("keeps slower local endpoint verification alive past 30s for %s", async (baseUrl) => {
+    vi.useFakeTimers();
+    const prompter = createTestPrompter({
+      text: [baseUrl, "", "slow-model", "fast-model", "custom", ""],
+      select: ["plaintext", "openai", "model"],
+    });
+    const fetchMock = stubAbortableFetchWithRetry();
+
+    const promptPromise = runPromptCustomApi(prompter);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(prompter.select).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(90_000);
+    await promptPromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(prompter.text).toHaveBeenCalledTimes(6);
+  });
+
+  it("still times out remote endpoint verification at 30s", async () => {
+    vi.useFakeTimers();
+    const prompter = createTestPrompter({
+      text: ["https://example.com/v1", "test-key", "slow-model", "fast-model", "custom", ""],
+      select: ["plaintext", "openai", "model"],
+    });
+    const fetchMock = stubAbortableFetchWithRetry();
+
+    const promptPromise = runPromptCustomApi(prompter);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await promptPromise;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(prompter.text).toHaveBeenCalledTimes(6);
   });
 
