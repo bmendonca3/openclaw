@@ -139,9 +139,7 @@ describe("Google Chat webhook routing", () => {
   it("scopes DM pairing checks to accountId", async () => {
     vi.mocked(verifyGoogleChatRequest).mockResolvedValue({ ok: true });
 
-    const readAllowFromStore = vi.fn(async (...args: unknown[]) =>
-      args[2] ? [] : ["users/alice"],
-    );
+    const readAllowFromStore = vi.fn(async () => []);
     const upsertPairingRequest = vi.fn(async () => ({ code: "PAIR42", created: false }));
     const core = {
       logging: {
@@ -215,7 +213,10 @@ describe("Google Chat webhook routing", () => {
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(200);
       await vi.waitFor(() => {
-        expect(readAllowFromStore).toHaveBeenCalledWith("googlechat", undefined, "work");
+        expect(readAllowFromStore).toHaveBeenCalledWith({
+          channel: "googlechat",
+          accountId: "work",
+        });
       });
       await vi.waitFor(() => {
         expect(upsertPairingRequest).toHaveBeenCalledWith({
