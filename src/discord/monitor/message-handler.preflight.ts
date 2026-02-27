@@ -182,10 +182,11 @@ export async function preflightDiscordMessage(
       return null;
     }
     if (dmPolicy !== "open") {
-      const storeAllowFrom =
-        dmPolicy === "allowlist"
-          ? []
-          : await readChannelAllowFromStore("discord", undefined, params.accountId).catch(() => []);
+      const storeAllowFrom = await readStoreAllowFromForDmPolicy({
+        provider: "discord",
+        accountId: resolvedAccountId,
+        dmPolicy,
+      });
       const effectiveAllowFrom = [...(params.allowFrom ?? []), ...storeAllowFrom];
       const allowList = normalizeDiscordAllowList(effectiveAllowFrom, ["discord:", "user:", "pk:"]);
       const allowMatch = allowList
