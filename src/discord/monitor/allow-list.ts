@@ -189,15 +189,17 @@ export function resolveDiscordMemberAllowed(params: {
   userTag?: string;
   allowNameMatching?: boolean;
 }) {
-  const hasUserRestriction = Array.isArray(params.userAllowList);
-  const hasRoleRestriction = Array.isArray(params.roleAllowList);
+  const userAllowList = Array.isArray(params.userAllowList) ? params.userAllowList : undefined;
+  const roleAllowList = Array.isArray(params.roleAllowList) ? params.roleAllowList : undefined;
+  const hasUserRestriction = Array.isArray(userAllowList);
+  const hasRoleRestriction = Array.isArray(roleAllowList);
   if (!hasUserRestriction && !hasRoleRestriction) {
     return true;
   }
   const userOk =
-    hasUserRestriction && params.userAllowList.length > 0
+    hasUserRestriction && userAllowList.length > 0
       ? resolveDiscordUserAllowed({
-          allowList: params.userAllowList,
+          allowList: userAllowList,
           userId: params.userId,
           userName: params.userName,
           userTag: params.userTag,
@@ -205,9 +207,9 @@ export function resolveDiscordMemberAllowed(params: {
         })
       : false;
   const roleOk =
-    hasRoleRestriction && params.roleAllowList.length > 0
+    hasRoleRestriction && roleAllowList.length > 0
       ? resolveDiscordRoleAllowed({
-          allowList: params.roleAllowList,
+          allowList: roleAllowList,
           memberRoleIds: params.memberRoleIds,
         })
       : false;
