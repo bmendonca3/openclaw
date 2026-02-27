@@ -31,7 +31,7 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
     getPluginCommandSpecs.mockReturnValue([]);
     matchPluginCommand.mockReturnValue(null);
     executePluginCommand.mockResolvedValue({ text: "ok" });
-    deliverReplies.mockResolvedValue({ delivered: true });
+    deliverReplies.mockResolvedValue(undefined);
   });
 
   it("does not register plugin commands in menu when native=false but keeps handlers available", () => {
