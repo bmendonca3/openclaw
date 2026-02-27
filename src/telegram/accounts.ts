@@ -46,10 +46,16 @@ export type ResolvedTelegramAccount = {
 };
 
 function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
-  return listConfiguredAccountIdsFromSection({
-    accounts: cfg.channels?.telegram?.accounts,
-    normalizeAccountId,
-  });
+  const ids = new Set(
+    listConfiguredAccountIdsFromSection({
+      accounts: cfg.channels?.telegram?.accounts,
+      normalizeAccountId,
+    }),
+  );
+  if (resolveTelegramToken(cfg, { accountId: DEFAULT_ACCOUNT_ID }).source !== "none") {
+    ids.add(DEFAULT_ACCOUNT_ID);
+  }
+  return [...ids];
 }
 
 export function listTelegramAccountIds(cfg: OpenClawConfig): string[] {
