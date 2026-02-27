@@ -3,7 +3,6 @@ import {
   DM_GROUP_ACCESS_REASON,
   readStoreAllowFromForDmPolicy,
   resolveDmAllowState,
-  resolveDmGroupAccessWithCommandGate,
   resolveDmGroupAccessDecision,
   resolveDmGroupAccessWithLists,
   resolveEffectiveAllowFromLists,

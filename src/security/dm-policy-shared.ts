@@ -32,16 +32,6 @@ export function resolveEffectiveAllowFromLists(params: {
       fallbackToAllowFrom: params.groupAllowFromFallbackToAllowFrom ?? undefined,
     }),
   );
-  const storeAllowFrom =
-    params.dmPolicy === "allowlist"
-      ? []
-      : normalizeStringEntries(
-          Array.isArray(params.storeAllowFrom) ? params.storeAllowFrom : undefined,
-        );
-  const effectiveAllowFrom = normalizeStringEntries([...configAllowFrom, ...storeAllowFrom]);
-  const groupBase = configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom;
-  // Pairing-store approvals are for DMs only and must not broaden group authorization.
-  const effectiveGroupAllowFrom = normalizeStringEntries(groupBase);
   return { effectiveAllowFrom, effectiveGroupAllowFrom };
 }
 
