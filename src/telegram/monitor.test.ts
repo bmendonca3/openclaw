@@ -55,8 +55,9 @@ const { registerUnhandledRejectionHandlerMock, emitUnhandledRejection, resetUnha
     };
   });
 
-const { createTelegramBotErrors } = vi.hoisted(() => ({
+const { createTelegramBotErrors, createTelegramBotSpy } = vi.hoisted(() => ({
   createTelegramBotErrors: [] as unknown[],
+  createTelegramBotSpy: vi.fn(),
 }));
 
 const { computeBackoff, sleepWithAbort } = vi.hoisted(() => ({
@@ -65,6 +66,9 @@ const { computeBackoff, sleepWithAbort } = vi.hoisted(() => ({
 }));
 const { startTelegramWebhookSpy } = vi.hoisted(() => ({
   startTelegramWebhookSpy: vi.fn(async () => ({ server: { close: vi.fn() }, stop: vi.fn() })),
+}));
+const { resolveTelegramProxyFetch } = vi.hoisted(() => ({
+  resolveTelegramProxyFetch: vi.fn(),
 }));
 
 type RunnerStub = {
@@ -106,7 +110,8 @@ vi.mock("../config/config.js", async (importOriginal) => {
 });
 
 vi.mock("./bot.js", () => ({
-  createTelegramBot: () => {
+  createTelegramBot: (opts: unknown) => {
+    createTelegramBotSpy(opts);
     const nextError = createTelegramBotErrors.shift();
     if (nextError) {
       throw nextError;
@@ -153,6 +158,10 @@ vi.mock("./webhook.js", () => ({
   startTelegramWebhook: startTelegramWebhookSpy,
 }));
 
+vi.mock("./proxy.js", () => ({
+  resolveTelegramProxyFetch,
+}));
+
 vi.mock("../auto-reply/reply.js", () => ({
   getReplyFromConfig: async (ctx: { Body?: string }) => ({
     text: `echo:${ctx.Body}`,
@@ -176,13 +185,16 @@ describe("monitorTelegramProvider (grammY)", () => {
     computeBackoff.mockClear();
     sleepWithAbort.mockClear();
     startTelegramWebhookSpy.mockClear();
+    resolveTelegramProxyFetch.mockReset().mockReturnValue(undefined);
     registerUnhandledRejectionHandlerMock.mockClear();
     resetUnhandledRejection();
     createTelegramBotErrors.length = 0;
+    createTelegramBotSpy.mockClear();
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     consoleErrorSpy?.mockRestore();
   });
 
@@ -224,6 +236,21 @@ describe("monitorTelegramProvider (grammY)", () => {
           maxRetryTime: 60 * 60 * 1000,
           retryInterval: "exponential",
         }),
+      }),
+    );
+  });
+
+  it("uses env-backed proxy fetch when telegram config does not set a proxy", async () => {
+    const proxyFetch = vi.fn();
+    resolveTelegramProxyFetch.mockReturnValue(proxyFetch);
+    vi.stubEnv("HTTPS_PROXY", "http://proxy.test:8080");
+
+    await monitorWithAutoAbort();
+
+    expect(resolveTelegramProxyFetch).toHaveBeenCalledWith(undefined);
+    expect(createTelegramBotSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proxyFetch,
       }),
     );
   });
