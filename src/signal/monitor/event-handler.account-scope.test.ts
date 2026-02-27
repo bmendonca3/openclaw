@@ -54,7 +54,7 @@ describe("signal pairing account scoping", () => {
       }),
     );
 
-    expect(readAllowFromMock).toHaveBeenCalledWith("signal", undefined, "work");
+    expect(readAllowFromMock).toHaveBeenCalledWith("signal", expect.any(Object), "work");
     expect(dispatchMock).toHaveBeenCalled();
   });
 

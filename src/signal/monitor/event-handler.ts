@@ -486,27 +486,22 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
     const groupId = dataMessage.groupInfo?.groupId ?? undefined;
     const groupName = dataMessage.groupInfo?.groupName ?? undefined;
     const isGroup = Boolean(groupId);
-    const storeAllowFrom =
-      deps.dmPolicy === "allowlist"
-        ? []
-        : await readChannelAllowFromStore("signal", undefined, deps.accountId).catch(() => []);
-    const effectiveDmAllow = [...deps.allowFrom, ...storeAllowFrom];
-    const effectiveGroupAllow = [...deps.groupAllowFrom, ...storeAllowFrom];
-    const dmAllowed =
-      deps.dmPolicy === "open" ? true : isSignalSenderAllowed(sender, effectiveDmAllow);
 
     if (!isGroup) {
-      if (deps.dmPolicy === "disabled") {
-        return;
-      }
-      if (!dmAllowed) {
-        if (deps.dmPolicy === "pairing") {
-          const senderId = senderAllowId;
-          const { code, created } = await upsertChannelPairingRequest({
-            channel: "signal",
-            id: senderId,
+      const allowedDirectMessage = await handleSignalDirectMessageAccess({
+        dmPolicy: deps.dmPolicy,
+        dmAccessDecision: dmAccess.decision,
+        senderId: senderAllowId,
+        senderIdLine,
+        senderDisplay,
+        senderName: envelope.sourceName ?? undefined,
+        accountId: deps.accountId,
+        sendPairingReply: async (text) => {
+          await sendMessageSignal(`signal:${senderRecipient}`, text, {
+            baseUrl: deps.baseUrl,
+            account: deps.account,
+            maxBytes: deps.mediaMaxBytes,
             accountId: deps.accountId,
-            meta: { name: envelope.sourceName ?? undefined },
           });
         },
         log: logVerbose,
