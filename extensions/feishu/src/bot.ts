@@ -689,9 +689,7 @@ export async function handleFeishuMessage(params: {
       !isGroup &&
       dmPolicy !== "allowlist" &&
       (dmPolicy !== "open" || shouldComputeCommandAuthorized)
-        ? await core.channel.pairing
-            .readAllowFromStore("feishu", undefined, account.accountId)
-            .catch(() => [])
+        ? await pairing.readAllowFromStore().catch(() => [])
         : [];
     const effectiveDmAllowFrom = [...configAllowFrom, ...storeAllowFrom];
     const dmAllowed = resolveFeishuAllowlistMatch({
@@ -705,7 +703,6 @@ export async function handleFeishuMessage(params: {
       if (dmPolicy === "pairing") {
         const { code, created } = await pairing.upsertPairingRequest({
           id: ctx.senderOpenId,
-          accountId: account.accountId,
           meta: { name: ctx.senderName },
         });
         if (created) {
