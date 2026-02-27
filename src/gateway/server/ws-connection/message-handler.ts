@@ -791,6 +791,8 @@ export function attachGatewayWsMessageHandler(params: {
               deviceId: device.id,
               publicKey: devicePublicKey,
               ...clientAccessMetadata,
+              platform: connectParams.client.platform,
+              deviceFamily: connectParams.client.deviceFamily,
               // Bootstrap-token onboarding must require an explicit pairing approval, even on
               // loopback, so the one-time token can't silently self-pair a device.
               silent: !usedBootstrapToken && allowSilentLocalPairing,
