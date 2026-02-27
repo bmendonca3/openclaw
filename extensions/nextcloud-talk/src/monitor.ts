@@ -190,6 +190,9 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
     opts.maxBodyBytes > 0
       ? Math.floor(opts.maxBodyBytes)
       : DEFAULT_WEBHOOK_MAX_BODY_BYTES;
+  const readBody = opts.readBody ?? readNextcloudTalkWebhookBody;
+  const isBackendAllowed = opts.isBackendAllowed;
+  const shouldProcessMessage = opts.shouldProcessMessage;
   const seenWebhookSignatures = new Map<string, number>();
 
   const pruneReplayCache = (nowMs: number) => {
@@ -254,10 +257,15 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
       }
       seenWebhookSignatures.set(replayKey, nowMs);
 
-      const payload = parseWebhookPayload(body);
-      if (!payload) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Invalid payload format" }));
+      const decoded = decodeWebhookCreateMessage({
+        body,
+        res,
+      });
+      if (decoded.kind === "invalid") {
+        return;
+      }
+      if (decoded.kind === "ignore") {
+        writeJsonResponse(res, 200);
         return;
       }
 
