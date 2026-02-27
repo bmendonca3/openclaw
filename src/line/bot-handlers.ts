@@ -122,8 +122,12 @@ async function shouldProcessLineEvent(
   const senderId = userId ?? "";
   const dmPolicy = account.config.dmPolicy ?? "pairing";
 
-  const storeAllowFrom = isGroup ? [] : await readChannelAllowFromStore("line").catch(() => []);
-  const effectiveDmAllow = normalizeAllowFromWithStore({
+  const storeAllowFrom = await readChannelAllowFromStore(
+    "line",
+    process.env,
+    account.accountId,
+  ).catch(() => []);
+  const effectiveDmAllow = normalizeDmAllowFromWithStore({
     allowFrom: account.config.allowFrom,
     storeAllowFrom,
     dmPolicy,
