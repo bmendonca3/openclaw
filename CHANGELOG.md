@@ -770,8 +770,6 @@ Docs: https://docs.openclaw.ai
 
 - Security: strip hidden text from `web_fetch` extracted content to prevent indirect prompt injection, covering CSS-hidden elements, class-based hiding (sr-only, d-none, etc.), invisible Unicode, color:transparent, offscreen transforms, and non-content tags. (#8027, #21074) Thanks @hydro13 for the fix and @LucasAIBuilder for reporting.
 - Channels/Feishu: pass agent-scoped media local roots through outbound uploads so files from per-agent workspaces upload instead of falling back to plain path links.
-- Android/Security: require TLS for non-loopback gateway connections, block manual non-loopback plaintext attempts with a clear status error, and keep plaintext WS limited to loopback-only development flows.
-- Android/Security: exclude `openclaw/identity` from Android cloud backup/device-transfer rules so device private identity material is not exported.
 - Agents/Streaming: keep assistant partial streaming active during reasoning streams, handle native `thinking_*` stream events consistently, dedupe mixed reasoning-end signals, and clear stale mutating tool errors after same-target retry success. (#20635) Thanks @obviyus.
 - iOS/Chat: use a dedicated iOS chat session key for ChatSheet routing to avoid cross-client session collisions with main-session traffic. (#21139) thanks @mbelinky.
 - iOS/Chat: auto-resync chat history after reconnect sequence gaps, clear stale pending runs, and avoid dead-end manual refresh errors after transient disconnects. (#21135) thanks @mbelinky.
