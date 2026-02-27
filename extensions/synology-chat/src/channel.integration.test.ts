@@ -11,12 +11,16 @@ type RegisteredRoute = {
 const registerPluginHttpRouteMock = vi.fn<(params: RegisteredRoute) => () => void>(() => vi.fn());
 const dispatchReplyWithBufferedBlockDispatcher = vi.fn().mockResolvedValue({ counts: {} });
 
-vi.mock("openclaw/plugin-sdk", () => ({
-  DEFAULT_ACCOUNT_ID: "default",
-  setAccountEnabledInConfigSection: vi.fn((_opts: any) => ({})),
-  registerPluginHttpRoute: registerPluginHttpRouteMock,
-  buildChannelConfigSchema: vi.fn((schema: any) => ({ schema })),
-}));
+vi.mock("openclaw/plugin-sdk", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk")>();
+  return {
+    ...actual,
+    DEFAULT_ACCOUNT_ID: "default",
+    setAccountEnabledInConfigSection: vi.fn((_opts: any) => ({})),
+    registerPluginHttpRoute: registerPluginHttpRouteMock,
+    buildChannelConfigSchema: vi.fn((schema: any) => ({ schema })),
+  };
+});
 
 vi.mock("./runtime.js", () => ({
   getSynologyRuntime: vi.fn(() => ({
@@ -37,10 +41,24 @@ vi.mock("./client.js", () => ({
 const { createSynologyChatPlugin } = await import("./channel.js");
 
 function makeReq(method: string, body: string): IncomingMessage {
-  const req = new EventEmitter() as IncomingMessage;
+  const req = new EventEmitter() as IncomingMessage & {
+    destroyed: boolean;
+  };
   req.method = method;
+  req.headers = {};
   req.socket = { remoteAddress: "127.0.0.1" } as any;
+  req.destroyed = false;
+  req.destroy = ((_: Error | undefined) => {
+    if (req.destroyed) {
+      return req;
+    }
+    req.destroyed = true;
+    return req;
+  }) as IncomingMessage["destroy"];
   process.nextTick(() => {
+    if (req.destroyed) {
+      return;
+    }
     req.emit("data", Buffer.from(body));
     req.emit("end");
   });
