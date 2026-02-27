@@ -61,7 +61,7 @@ describe("createNextcloudTalkWebhookServer replay handling", () => {
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect(shouldProcessMessage).toHaveBeenCalledTimes(2);
+    expect(shouldProcessMessage).toHaveBeenCalledTimes(1);
     expect(onMessage).toHaveBeenCalledTimes(1);
   });
 });
