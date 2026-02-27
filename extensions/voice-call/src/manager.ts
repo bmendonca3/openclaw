@@ -167,9 +167,15 @@ export class CallManager {
     }
 
     // Twilio outbound calls already handle initial playback via provider-specific
-    // call setup. Inbound calls still need the normal speakInitialMessage path.
-    if (this.provider.name === "twilio" && call.direction !== "inbound") {
-      return;
+    // call setup. Inbound calls should wait until Twilio has a playback route
+    // (media stream or webhook fallback) so we do not consume the greeting too early.
+    if (this.provider.name === "twilio") {
+      if (call.direction !== "inbound") {
+        return;
+      }
+      if (!this.provider.canPlayTtsNow?.(call.providerCallId)) {
+        return;
+      }
     }
 
     void this.speakInitialMessage(call.providerCallId);

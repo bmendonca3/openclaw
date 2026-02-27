@@ -22,6 +22,7 @@ class FakeProvider implements VoiceCallProvider {
   readonly hangupCalls: HangupCallInput[] = [];
   readonly startListeningCalls: StartListeningInput[] = [];
   readonly stopListeningCalls: StopListeningInput[] = [];
+  canPlayTtsNowResult = true;
 
   constructor(name: "plivo" | "twilio" = "plivo") {
     this.name = name;
@@ -41,6 +42,9 @@ class FakeProvider implements VoiceCallProvider {
   }
   async playTts(input: PlayTtsInput): Promise<void> {
     this.playTtsCalls.push(input);
+  }
+  canPlayTtsNow(_providerCallId: string): boolean {
+    return this.canPlayTtsNowResult;
   }
   async startListening(input: StartListeningInput): Promise<void> {
     this.startListeningCalls.push(input);
@@ -134,7 +138,7 @@ describe("CallManager", () => {
     expect(provider.playTtsCalls[0]?.text).toBe("Hello there");
   });
 
-  it("speaks inboundGreeting on answered for Twilio inbound calls", async () => {
+  it("speaks inboundGreeting on answered for Twilio inbound calls when playback is ready", async () => {
     const provider = new FakeProvider("twilio");
     const { manager } = createManagerHarness(
       {
@@ -177,6 +181,57 @@ describe("CallManager", () => {
     expect(manager.getCallByProviderCallId("provider-inbound")?.metadata?.initialMessage).toBe(
       undefined,
     );
+  });
+
+  it("preserves Twilio inboundGreeting until playback becomes ready", async () => {
+    const provider = new FakeProvider("twilio");
+    provider.canPlayTtsNowResult = false;
+    const { manager } = createManagerHarness(
+      {
+        provider: "twilio",
+        inboundPolicy: "open",
+        inboundGreeting: "Welcome inbound",
+      },
+      provider,
+    );
+
+    manager.processEvent({
+      id: "evt-inbound-init-deferred",
+      type: "call.initiated",
+      callId: "inbound-call-deferred",
+      providerCallId: "provider-inbound-deferred",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+15550001111",
+      to: "+15550000000",
+    });
+
+    manager.processEvent({
+      id: "evt-inbound-answer-deferred",
+      type: "call.answered",
+      callId: "inbound-call-deferred",
+      providerCallId: "provider-inbound-deferred",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+15550001111",
+      to: "+15550000000",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(provider.playTtsCalls).toHaveLength(0);
+    expect(
+      manager.getCallByProviderCallId("provider-inbound-deferred")?.metadata?.initialMessage,
+    ).toBe("Welcome inbound");
+
+    provider.canPlayTtsNowResult = true;
+    await manager.speakInitialMessage("provider-inbound-deferred");
+
+    expect(provider.playTtsCalls).toHaveLength(1);
+    expect(provider.playTtsCalls[0]?.text).toBe("Welcome inbound");
+    expect(
+      manager.getCallByProviderCallId("provider-inbound-deferred")?.metadata?.initialMessage,
+    ).toBeUndefined();
   });
 
   it("rejects inbound calls with missing caller ID when allowlist enabled", () => {

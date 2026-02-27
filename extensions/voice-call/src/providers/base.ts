@@ -57,6 +57,12 @@ export interface VoiceCallProvider {
   playTts(input: PlayTtsInput): Promise<void>;
 
   /**
+   * Whether the provider can play TTS for this call immediately.
+   * Used to defer initial greetings until provider-specific playback state is ready.
+   */
+  canPlayTtsNow?(providerCallId: string): boolean;
+
+  /**
    * Start listening for user speech (activate STT).
    */
   startListening(input: StartListeningInput): Promise<void>;

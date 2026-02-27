@@ -166,6 +166,10 @@ export class TwilioProvider implements VoiceCallProvider {
     this.callStreamMap.delete(callSid);
   }
 
+  canPlayTtsNow(providerCallId: string): boolean {
+    return this.callStreamMap.has(providerCallId) || this.callWebhookUrls.has(providerCallId);
+  }
+
   isValidStreamToken(callSid: string, token?: string): boolean {
     const expected = this.streamAuthTokens.get(callSid);
     if (!expected || !token) {
