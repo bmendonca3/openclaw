@@ -7,6 +7,7 @@ import {
   type ExecApprovalsFile,
   type ExecAsk,
   type ExecSecurity,
+  type SystemRunApprovalPlanV2,
   maxAsk,
   minSecurity,
   resolveExecApprovalsFromFile,
@@ -14,12 +15,13 @@ import {
 import { buildNodeShellCommand } from "../../infra/node-shell.js";
 import { applyPathPrepend } from "../../infra/path-prepend.js";
 import { parsePreparedSystemRunPayload } from "../../infra/system-run-approval-context.js";
+import { resolveSystemRunCommand } from "../../infra/system-run-command.js";
 import { defaultRuntime } from "../../runtime.js";
 import { parseEnvPairs, parseTimeoutMs } from "../nodes-run.js";
 import { getNodesTheme, runNodesCommand } from "./cli-utils.js";
 import { parseNodeList } from "./format.js";
 import { callGatewayCli, nodesCallOpts, resolveNodeId, unauthorizedHintForMessage } from "./rpc.js";
-import type { NodesRpcOpts } from "./types.js";
+import type { NodeListNode, NodesRpcOpts } from "./types.js";
 
 type NodesRunOpts = NodesRpcOpts & {
   node?: string;
@@ -43,6 +45,20 @@ type ExecDefaults = {
   safeBins?: string[];
 };
 
+type NodesRunApprovalContext = {
+  argv: string[];
+  rawCommand: string | null;
+  cwd: string | null;
+  agentId: string | null;
+  sessionKey: string | null;
+};
+
+type PreparedNodesRunContext = {
+  cmdText: string;
+  approvalContext: NodesRunApprovalContext;
+  systemRunPlanV2: SystemRunApprovalPlanV2 | null;
+};
+
 function normalizeExecSecurity(value?: string | null): ExecSecurity | null {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "deny" || normalized === "allowlist" || normalized === "full") {
@@ -57,6 +73,14 @@ function normalizeExecAsk(value?: string | null): ExecAsk | null {
     return normalized as ExecAsk;
   }
   return null;
+}
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function resolveExecDefaults(
@@ -85,12 +109,11 @@ function resolveExecDefaults(
   };
 }
 
-async function resolveNodePlatform(opts: NodesRpcOpts, nodeId: string): Promise<string | null> {
+async function resolveNodeInfo(opts: NodesRpcOpts, nodeId: string): Promise<NodeListNode | null> {
   try {
     const res = await callGatewayCli("node.list", opts, {});
     const nodes = parseNodeList(res);
-    const match = nodes.find((node) => node.nodeId === nodeId);
-    return typeof match?.platform === "string" ? match.platform : null;
+    return nodes.find((node) => node.nodeId === nodeId) ?? null;
   } catch {
     return null;
   }
@@ -102,6 +125,56 @@ function requirePreparedRunPayload(payload: unknown) {
     throw new Error("invalid system.run.prepare response");
   }
   return prepared;
+}
+
+function buildLocalPreparedRunContext(params: {
+  command: string[];
+  rawCommand?: string;
+  cwd?: string;
+  agentId?: string;
+}): PreparedNodesRunContext {
+  const resolved = resolveSystemRunCommand({
+    command: params.command,
+    rawCommand: params.rawCommand,
+  });
+  if (!resolved.ok || resolved.argv.length === 0) {
+    throw new Error(resolved.ok ? "command required" : resolved.message);
+  }
+  return {
+    cmdText: resolved.cmdText,
+    approvalContext: {
+      argv: resolved.argv,
+      rawCommand: resolved.rawCommand,
+      cwd: normalizeOptionalString(params.cwd),
+      agentId: normalizeOptionalString(params.agentId),
+      sessionKey: null,
+    },
+    systemRunPlanV2: null,
+  };
+}
+
+function toPreparedNodesRunContext(
+  prepared: ReturnType<typeof requirePreparedRunPayload>,
+): PreparedNodesRunContext {
+  return {
+    cmdText: prepared.cmdText,
+    approvalContext: {
+      argv: prepared.plan.argv,
+      rawCommand: prepared.plan.rawCommand,
+      cwd: prepared.plan.cwd,
+      agentId: prepared.plan.agentId,
+      sessionKey: prepared.plan.sessionKey,
+    },
+    systemRunPlanV2: prepared.plan,
+  };
+}
+
+function isUnsupportedNodeCommandError(error: unknown, command: string): boolean {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  return (
+    message.includes("node command not allowed") &&
+    message.includes(`does not support "${command}"`)
+  );
 }
 
 function resolveNodesRunPolicy(opts: NodesRunOpts, execDefaults: ExecDefaults | undefined) {
@@ -135,10 +208,10 @@ async function prepareNodesRunContext(params: {
 
   let argv = Array.isArray(params.command) ? params.command : [];
   let rawCommand: string | undefined;
+  const nodeInfo = await resolveNodeInfo(params.opts, params.nodeId);
   if (params.raw) {
     rawCommand = params.raw;
-    const platform = await resolveNodePlatform(params.opts, params.nodeId);
-    argv = buildNodeShellCommand(rawCommand, platform ?? undefined);
+    argv = buildNodeShellCommand(rawCommand, nodeInfo?.platform ?? undefined);
   }
 
   const nodeEnv = env ? { ...env } : undefined;
@@ -146,24 +219,54 @@ async function prepareNodesRunContext(params: {
     applyPathPrepend(nodeEnv, params.execDefaults?.pathPrepend, { requireExisting: true });
   }
 
-  const prepareResponse = (await callGatewayCli("node.invoke", params.opts, {
-    nodeId: params.nodeId,
-    command: "system.run.prepare",
-    params: {
+  const fallbackPrepared = () =>
+    buildLocalPreparedRunContext({
       command: argv,
       rawCommand,
       cwd: params.opts.cwd,
       agentId: params.agentId,
-    },
-    idempotencyKey: `prepare-${randomIdempotencyKey()}`,
-  })) as { payload?: unknown } | null;
+    });
 
-  return {
-    prepared: requirePreparedRunPayload(prepareResponse?.payload),
-    nodeEnv,
-    timeoutMs,
-    invokeTimeout,
-  };
+  const advertisedCommands = Array.isArray(nodeInfo?.commands) ? nodeInfo.commands : null;
+  if (advertisedCommands && !advertisedCommands.includes("system.run.prepare")) {
+    return {
+      prepared: fallbackPrepared(),
+      nodeEnv,
+      timeoutMs,
+      invokeTimeout,
+    };
+  }
+
+  try {
+    const prepareResponse = (await callGatewayCli("node.invoke", params.opts, {
+      nodeId: params.nodeId,
+      command: "system.run.prepare",
+      params: {
+        command: argv,
+        rawCommand,
+        cwd: params.opts.cwd,
+        agentId: params.agentId,
+      },
+      idempotencyKey: `prepare-${randomIdempotencyKey()}`,
+    })) as { payload?: unknown } | null;
+
+    return {
+      prepared: toPreparedNodesRunContext(requirePreparedRunPayload(prepareResponse?.payload)),
+      nodeEnv,
+      timeoutMs,
+      invokeTimeout,
+    };
+  } catch (error) {
+    if (!isUnsupportedNodeCommandError(error, "system.run.prepare")) {
+      throw error;
+    }
+    return {
+      prepared: fallbackPrepared(),
+      nodeEnv,
+      timeoutMs,
+      invokeTimeout,
+    };
+  }
 }
 
 async function resolveNodeApprovals(params: {
@@ -201,7 +304,8 @@ async function maybeRequestNodesRunApproval(params: {
   nodeId: string;
   agentId: string | undefined;
   preparedCmdText: string;
-  approvalPlan: ReturnType<typeof requirePreparedRunPayload>["plan"];
+  approvalContext: NodesRunApprovalContext;
+  systemRunPlanV2: SystemRunApprovalPlanV2 | null;
   hostSecurity: ExecSecurity;
   hostAsk: ExecAsk;
   askFallback: ExecSecurity;
@@ -227,16 +331,16 @@ async function maybeRequestNodesRunApproval(params: {
     {
       id: approvalId,
       command: params.preparedCmdText,
-      commandArgv: params.approvalPlan.argv,
-      systemRunPlanV2: params.approvalPlan,
-      cwd: params.approvalPlan.cwd,
+      commandArgv: params.approvalContext.argv,
+      systemRunPlanV2: params.systemRunPlanV2 ?? undefined,
+      cwd: params.approvalContext.cwd,
       nodeId: params.nodeId,
       host: "node",
       security: params.hostSecurity,
       ask: params.hostAsk,
-      agentId: params.approvalPlan.agentId ?? params.agentId,
+      agentId: params.approvalContext.agentId ?? params.agentId,
       resolvedPath: undefined,
-      sessionKey: params.approvalPlan.sessionKey ?? undefined,
+      sessionKey: params.approvalContext.sessionKey ?? undefined,
       timeoutMs: approvalTimeoutMs,
     },
     { transportTimeoutMs },
@@ -267,7 +371,7 @@ async function maybeRequestNodesRunApproval(params: {
 
 function buildSystemRunInvokeParams(params: {
   nodeId: string;
-  approvalPlan: ReturnType<typeof requirePreparedRunPayload>["plan"];
+  approvalContext: NodesRunApprovalContext;
   nodeEnv: Record<string, string> | undefined;
   timeoutMs: number | undefined;
   invokeTimeout: number | undefined;
@@ -282,21 +386,21 @@ function buildSystemRunInvokeParams(params: {
     nodeId: params.nodeId,
     command: "system.run",
     params: {
-      command: params.approvalPlan.argv,
-      rawCommand: params.approvalPlan.rawCommand,
-      cwd: params.approvalPlan.cwd,
+      command: params.approvalContext.argv,
+      rawCommand: params.approvalContext.rawCommand,
+      cwd: params.approvalContext.cwd,
       env: params.nodeEnv,
       timeoutMs: params.timeoutMs,
       needsScreenRecording: params.needsScreenRecording,
     },
     idempotencyKey: String(params.idempotencyKey ?? randomIdempotencyKey()),
   };
-  if (params.approvalPlan.agentId ?? params.fallbackAgentId) {
+  if (params.approvalContext.agentId ?? params.fallbackAgentId) {
     (invokeParams.params as Record<string, unknown>).agentId =
-      params.approvalPlan.agentId ?? params.fallbackAgentId;
+      params.approvalContext.agentId ?? params.fallbackAgentId;
   }
-  if (params.approvalPlan.sessionKey) {
-    (invokeParams.params as Record<string, unknown>).sessionKey = params.approvalPlan.sessionKey;
+  if (params.approvalContext.sessionKey) {
+    (invokeParams.params as Record<string, unknown>).sessionKey = params.approvalContext.sessionKey;
   }
   (invokeParams.params as Record<string, unknown>).approved = params.approvedByAsk;
   if (params.approvalDecision) {
@@ -398,7 +502,7 @@ export function registerNodesInvokeCommands(nodes: Command) {
             agentId,
             execDefaults,
           });
-          const approvalPlan = preparedContext.prepared.plan;
+          const approvalContext = preparedContext.prepared.approvalContext;
           const policy = resolveNodesRunPolicy(opts, execDefaults);
           const approvals = await resolveNodeApprovals({
             opts,
@@ -415,14 +519,15 @@ export function registerNodesInvokeCommands(nodes: Command) {
             nodeId,
             agentId,
             preparedCmdText: preparedContext.prepared.cmdText,
-            approvalPlan,
+            approvalContext,
+            systemRunPlanV2: preparedContext.prepared.systemRunPlanV2,
             hostSecurity: approvals.hostSecurity,
             hostAsk: approvals.hostAsk,
             askFallback: approvals.askFallback,
           });
           const invokeParams = buildSystemRunInvokeParams({
             nodeId,
-            approvalPlan,
+            approvalContext,
             nodeEnv: preparedContext.nodeEnv,
             timeoutMs: preparedContext.timeoutMs,
             invokeTimeout: preparedContext.invokeTimeout,
