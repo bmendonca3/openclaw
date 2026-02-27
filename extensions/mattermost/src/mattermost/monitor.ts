@@ -361,14 +361,9 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
       senderId;
     const rawText = post.message?.trim() || "";
     const dmPolicy = account.config.dmPolicy ?? "pairing";
-    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
-    const storeAllowFrom = normalizeAllowList(
-      dmPolicy === "allowlist"
-        ? []
-        : await core.channel.pairing
-            .readAllowFromStore("mattermost", undefined, account.accountId)
-            .catch(() => []),
+    const normalizedAllowFrom = normalizeMattermostAllowList(account.config.allowFrom ?? []);
+    const normalizedGroupAllowFrom = normalizeMattermostAllowList(
+      account.config.groupAllowFrom ?? [],
     );
     const storeAllowFrom = normalizeMattermostAllowList(
       await readStoreAllowFromForDmPolicy({
@@ -438,7 +433,6 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         if (accessDecision.decision === "pairing") {
           const { code, created } = await pairing.upsertPairingRequest({
             id: senderId,
-            accountId: account.accountId,
             meta: { name: senderName },
           });
           logVerboseMessage(`mattermost: pairing request sender=${senderId} created=${created}`);
@@ -869,52 +863,34 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     }
     const kind = channelKind(channelInfo.type);
 
-    // Enforce DM/group policy and allowlist checks (same as normal messages)
-    if (kind === "direct") {
-      const dmPolicy = account.config.dmPolicy ?? "pairing";
-      if (dmPolicy === "disabled") {
-        logVerboseMessage(`mattermost: drop reaction (dmPolicy=disabled sender=${userId})`);
-        return;
-      }
-      // For pairing/allowlist modes, only allow reactions from approved senders
-      if (dmPolicy !== "open") {
-        const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-        const storeAllowFrom = normalizeAllowList(
-          dmPolicy === "allowlist"
-            ? []
-            : await core.channel.pairing
-                .readAllowFromStore("mattermost", undefined, account.accountId)
-                .catch(() => []),
-        );
-        const effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
-        const allowed = isSenderAllowed({
+    const dmPolicy = account.config.dmPolicy ?? "pairing";
+    const storeAllowFrom = normalizeMattermostAllowList(
+      await readStoreAllowFromForDmPolicy({
+        provider: "mattermost",
+        accountId: account.accountId,
+        dmPolicy,
+        readStore: pairing.readStoreForDmPolicy,
+      }),
+    );
+    const reactionAccess = resolveDmGroupAccessWithLists({
+      isGroup: kind !== "direct",
+      dmPolicy,
+      groupPolicy,
+      allowFrom: normalizeMattermostAllowList(account.config.allowFrom ?? []),
+      groupAllowFrom: normalizeMattermostAllowList(account.config.groupAllowFrom ?? []),
+      storeAllowFrom,
+      isSenderAllowed: (allowFrom) =>
+        isMattermostSenderAllowed({
           senderId: userId,
           senderName,
           allowFrom,
           allowNameMatching,
-        });
-        if (!allowed) {
-          logVerboseMessage(
-            `mattermost: drop reaction (dmPolicy=${dmPolicy} sender=${userId} not allowed)`,
-          );
-          return;
-        }
-      }
-    } else if (kind) {
-      if (groupPolicy === "disabled") {
-        logVerboseMessage(`mattermost: drop reaction (groupPolicy=disabled channel=${channelId})`);
-        return;
-      }
-      if (groupPolicy === "allowlist") {
-        const dmPolicyForStore = account.config.dmPolicy ?? "pairing";
-        const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
-        const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
-        const storeAllowFrom = normalizeAllowList(
-          dmPolicyForStore === "allowlist"
-            ? []
-            : await core.channel.pairing
-                .readAllowFromStore("mattermost", undefined, account.accountId)
-                .catch(() => []),
+        }),
+    });
+    if (reactionAccess.decision !== "allow") {
+      if (kind === "direct") {
+        logVerboseMessage(
+          `mattermost: drop reaction (dmPolicy=${dmPolicy} sender=${userId} reason=${reactionAccess.reason})`,
         );
       } else {
         logVerboseMessage(
