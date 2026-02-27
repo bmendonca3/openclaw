@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import net from "node:net";
+import os from "node:os";
 import {
   createLoggerBackedRuntime,
   type RuntimeEnv,
