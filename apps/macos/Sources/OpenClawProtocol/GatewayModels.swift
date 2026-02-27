@@ -2811,7 +2811,7 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
     public let command: String
     public let commandargv: [String]?
     public let systemrunplanv2: [String: AnyCodable]?
-    public let env: [String: AnyCodable]?
+    public let env: AnyCodable?
     public let cwd: AnyCodable?
     public let nodeid: AnyCodable?
     public let host: AnyCodable?
@@ -2820,7 +2820,10 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
     public let agentid: AnyCodable?
     public let resolvedpath: AnyCodable?
     public let sessionkey: AnyCodable?
-    public let env: AnyCodable?
+    public let turnsourcechannel: AnyCodable?
+    public let turnsourceto: AnyCodable?
+    public let turnsourceaccountid: AnyCodable?
+    public let turnsourcethreadid: AnyCodable?
     public let runtimeoutms: AnyCodable?
     public let needsscreenrecording: AnyCodable?
     public let timeoutms: Int?
@@ -2831,7 +2834,7 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
         command: String,
         commandargv: [String]?,
         systemrunplanv2: [String: AnyCodable]?,
-        env: [String: AnyCodable]?,
+        env: AnyCodable?,
         cwd: AnyCodable?,
         nodeid: AnyCodable?,
         host: AnyCodable?,
@@ -2840,7 +2843,10 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
         agentid: AnyCodable?,
         resolvedpath: AnyCodable?,
         sessionkey: AnyCodable?,
-        env: AnyCodable?,
+        turnsourcechannel: AnyCodable?,
+        turnsourceto: AnyCodable?,
+        turnsourceaccountid: AnyCodable?,
+        turnsourcethreadid: AnyCodable?,
         runtimeoutms: AnyCodable?,
         needsscreenrecording: AnyCodable?,
         timeoutms: Int?,
@@ -2859,7 +2865,10 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
         self.agentid = agentid
         self.resolvedpath = resolvedpath
         self.sessionkey = sessionkey
-        self.env = env
+        self.turnsourcechannel = turnsourcechannel
+        self.turnsourceto = turnsourceto
+        self.turnsourceaccountid = turnsourceaccountid
+        self.turnsourcethreadid = turnsourcethreadid
         self.runtimeoutms = runtimeoutms
         self.needsscreenrecording = needsscreenrecording
         self.timeoutms = timeoutms
@@ -2880,7 +2889,10 @@ public struct ExecApprovalRequestParams: Codable, Sendable {
         case agentid = "agentId"
         case resolvedpath = "resolvedPath"
         case sessionkey = "sessionKey"
-        case env
+        case turnsourcechannel = "turnSourceChannel"
+        case turnsourceto = "turnSourceTo"
+        case turnsourceaccountid = "turnSourceAccountId"
+        case turnsourcethreadid = "turnSourceThreadId"
         case runtimeoutms = "runTimeoutMs"
         case needsscreenrecording = "needsScreenRecording"
         case timeoutms = "timeoutMs"

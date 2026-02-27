@@ -518,7 +518,7 @@ describe("node.invoke approval bypass", () => {
         idempotencyKey: crypto.randomUUID(),
       });
       expect(invokeMismatch.ok).toBe(false);
-      expect(invokeMismatch.error?.message ?? "").toContain("does not match request");
+      expect(invokeMismatch.error?.message ?? "").toContain("env binding mismatch");
       await expectNoForwardedInvoke(() => invokeCount > invokeCountBeforeMismatch);
     } finally {
       wsApprover.close();
