@@ -14,21 +14,23 @@ type GatewayCall = {
   };
 };
 
+const nodeListResponse = {
+  nodes: [
+    {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      commands: ["system.run"],
+      connected: true,
+      permissions: { screenRecording: true },
+    },
+  ],
+};
+
 const callGateway = vi.fn(async (opts: GatewayCall) => {
   if (opts.method === "node.list") {
-    return {
-      nodes: [
-        {
-          nodeId: "mac-1",
-          displayName: "Mac",
-          platform: "macos",
-          caps: [],
-          commands: ["system.run"],
-          connected: true,
-          permissions: { screenRecording: true },
-        },
-      ],
-    };
+    return nodeListResponse;
   }
   if (opts.method === "node.invoke") {
     if (opts.params?.command === "system.run.prepare") {
@@ -96,6 +98,15 @@ describe("nodes run prepare fallback (#29171)", () => {
 
   beforeEach(() => {
     callGateway.mockClear();
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      commands: ["system.run"],
+      connected: true,
+      permissions: { screenRecording: true },
+    };
   });
 
   it("falls back to system.run when the node does not advertise system.run.prepare", async () => {
@@ -149,5 +160,31 @@ describe("nodes run prepare fallback (#29171)", () => {
       approvalDecision: "allow-once",
       runId: expect.any(String),
     });
+  });
+
+  it("falls back when the node omits commands and rejects system.run.prepare anyway", async () => {
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      connected: true,
+      permissions: { screenRecording: true },
+    };
+
+    const program = new Command();
+    program.exitOverride();
+    registerNodesCli(program);
+
+    await program.parseAsync(["nodes", "run", "--node", "mac-1", "echo", "hi"], {
+      from: "user",
+    });
+
+    const invokeCommands = callGateway.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.method === "node.invoke")
+      .map((entry) => entry.params?.command);
+
+    expect(invokeCommands).toEqual(["system.run.prepare", "system.run"]);
   });
 });
