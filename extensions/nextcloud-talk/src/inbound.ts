@@ -80,7 +80,6 @@ export async function handleNextcloudTalkInbound(params: {
   const senderName = message.senderName;
   const roomToken = message.roomToken;
   const roomName = message.roomName;
-  const accountId = account.accountId?.trim() || undefined;
 
   statusSink?.({ lastInboundAt: message.timestamp });
 
@@ -104,12 +103,12 @@ export async function handleNextcloudTalkInbound(params: {
 
   const configAllowFrom = normalizeNextcloudTalkAllowlist(account.config.allowFrom);
   const configGroupAllowFrom = normalizeNextcloudTalkAllowlist(account.config.groupAllowFrom);
-  const storeAllowFrom =
-    dmPolicy === "allowlist"
-      ? []
-      : await core.channel.pairing
-          .readAllowFromStore(CHANNEL_ID, undefined, accountId)
-          .catch(() => []);
+  const storeAllowFrom = await readStoreAllowFromForDmPolicy({
+    provider: CHANNEL_ID,
+    accountId: account.accountId,
+    dmPolicy,
+    readStore: pairing.readStoreForDmPolicy,
+  });
   const storeAllowList = normalizeNextcloudTalkAllowlist(storeAllowFrom);
 
   const roomMatch = resolveNextcloudTalkRoomMatch({
@@ -173,40 +172,26 @@ export async function handleNextcloudTalkInbound(params: {
       return;
     }
   } else {
-    if (dmPolicy === "disabled") {
-      runtime.log?.(`nextcloud-talk: drop DM sender=${senderId} (dmPolicy=disabled)`);
-      return;
-    }
-    if (dmPolicy !== "open") {
-      const dmAllowed = resolveNextcloudTalkAllowlistMatch({
-        allowFrom: effectiveAllowFrom,
-        senderId,
-      }).allowed;
-      if (!dmAllowed) {
-        if (dmPolicy === "pairing") {
-          const { code, created } = await core.channel.pairing.upsertPairingRequest({
-            channel: CHANNEL_ID,
-            id: senderId,
-            accountId,
-            meta: { name: senderName || undefined },
-          });
-          if (created) {
-            try {
-              await sendMessageNextcloudTalk(
-                roomToken,
-                core.channel.pairing.buildPairingReply({
-                  channel: CHANNEL_ID,
-                  idLine: `Your Nextcloud user id: ${senderId}`,
-                  code,
-                }),
-                { accountId: account.accountId },
-              );
-              statusSink?.({ lastOutboundAt: Date.now() });
-            } catch (err) {
-              runtime.error?.(
-                `nextcloud-talk: pairing reply failed for ${senderId}: ${String(err)}`,
-              );
-            }
+    if (access.decision !== "allow") {
+      if (access.decision === "pairing") {
+        const { code, created } = await pairing.upsertPairingRequest({
+          id: senderId,
+          meta: { name: senderName || undefined },
+        });
+        if (created) {
+          try {
+            await sendMessageNextcloudTalk(
+              roomToken,
+              core.channel.pairing.buildPairingReply({
+                channel: CHANNEL_ID,
+                idLine: `Your Nextcloud user id: ${senderId}`,
+                code,
+              }),
+              { accountId: account.accountId },
+            );
+            statusSink?.({ lastOutboundAt: Date.now() });
+          } catch (err) {
+            runtime.error?.(`nextcloud-talk: pairing reply failed for ${senderId}: ${String(err)}`);
           }
         }
       }

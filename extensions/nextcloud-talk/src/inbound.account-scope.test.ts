@@ -7,7 +7,7 @@ import type { CoreConfig, NextcloudTalkInboundMessage } from "./types.js";
 
 describe("nextcloud-talk pairing account scope", () => {
   it("uses account-scoped pairing reads/writes for DM authorization", async () => {
-    const readAllowFromStore = vi.fn(async (...args: unknown[]) => (args[2] ? [] : ["alice"]));
+    const readAllowFromStore = vi.fn(async () => []);
     const upsertPairingRequest = vi.fn(async () => ({ code: "PAIR42", created: false }));
 
     setNextcloudTalkRuntime({
@@ -72,7 +72,10 @@ describe("nextcloud-talk pairing account scope", () => {
       } as unknown as RuntimeEnv,
     });
 
-    expect(readAllowFromStore).toHaveBeenCalledWith("nextcloud-talk", undefined, "work");
+    expect(readAllowFromStore).toHaveBeenCalledWith({
+      channel: "nextcloud-talk",
+      accountId: "work",
+    });
     expect(upsertPairingRequest).toHaveBeenCalledWith({
       channel: "nextcloud-talk",
       id: "alice",
