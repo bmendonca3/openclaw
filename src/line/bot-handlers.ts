@@ -127,7 +127,7 @@ async function shouldProcessLineEvent(
     process.env,
     account.accountId,
   ).catch(() => []);
-  const effectiveDmAllow = normalizeAllowFromWithStore({
+  const effectiveDmAllow = normalizeDmAllowFromWithStore({
     allowFrom: account.config.allowFrom,
     storeAllowFrom,
     dmPolicy,
