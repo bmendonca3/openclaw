@@ -55,6 +55,21 @@ import Testing
         #expect(token == nil)
     }
 
+    @Test func resolveGatewayTokenFallsBackToRemoteTokenForLocalLoopbackMode() {
+        let token = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "remote": [
+                        "token": "remote-token"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(token == "remote-token")
+    }
+
     @Test func resolveGatewayPasswordFallsBackToLaunchd() {
         let snapshot = LaunchAgentPlistSnapshot(
             programArguments: [],
@@ -72,6 +87,21 @@ import Testing
             env: [:],
             launchdSnapshot: snapshot)
         #expect(password == "launchd-pass")
+    }
+
+    @Test func resolveGatewayPasswordFallsBackToRemotePasswordForLocalLoopbackMode() {
+        let password = GatewayEndpointStore._testResolveGatewayPassword(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "remote": [
+                        "password": "remote-pass"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(password == "remote-pass")
     }
 
     @Test func connectionModeResolverPrefersConfigModeOverDefaults() {

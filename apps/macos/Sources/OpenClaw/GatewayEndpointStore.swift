@@ -143,6 +143,12 @@ actor GatewayEndpointStore {
         {
             return password.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        if let gateway = root["gateway"] as? [String: Any],
+           let remote = gateway["remote"] as? [String: Any],
+           let password = remote["password"] as? String
+        {
+            return password.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return nil
     }
 
@@ -200,6 +206,12 @@ actor GatewayEndpointStore {
         if let gateway = root["gateway"] as? [String: Any],
            let auth = gateway["auth"] as? [String: Any],
            let token = auth["token"] as? String
+        {
+            return token.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let gateway = root["gateway"] as? [String: Any],
+           let remote = gateway["remote"] as? [String: Any],
+           let token = remote["token"] as? String
         {
             return token.trimmingCharacters(in: .whitespacesAndNewlines)
         }
