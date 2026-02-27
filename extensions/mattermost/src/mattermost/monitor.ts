@@ -426,10 +426,31 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
       senderId;
     const rawText = post.message?.trim() || "";
     const dmPolicy = account.config.dmPolicy ?? "pairing";
-    const normalizedAllowFrom = normalizeMattermostAllowList(account.config.allowFrom ?? []);
-    const normalizedGroupAllowFrom = normalizeMattermostAllowList(
-      account.config.groupAllowFrom ?? [],
+    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
+    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
+    const storeAllowFrom = normalizeAllowList(
+      await readStoreAllowFromForDmPolicy({
+        provider: "mattermost",
+        accountId: account.accountId,
+        dmPolicy,
+        readStore: pairing.readStoreForDmPolicy,
+      }),
     );
+    const accessDecision = resolveDmGroupAccessWithLists({
+      isGroup: kind !== "direct",
+      dmPolicy,
+      groupPolicy,
+      allowFrom: configAllowFrom,
+      groupAllowFrom: configGroupAllowFrom,
+      storeAllowFrom,
+      isSenderAllowed: (allowFrom) =>
+        isSenderAllowed({
+          senderId,
+          senderName,
+          allowFrom,
+          allowNameMatching,
+        }),
+    });
     const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveMattermostEffectiveAllowlists({
       configAllowFrom,
       configGroupAllowFrom,
@@ -442,7 +463,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     const hasControlCommand = core.channel.text.hasControlCommand(rawText, cfg);
     const isControlCommand = allowTextCommands && hasControlCommand;
     const useAccessGroups = cfg.commands?.useAccessGroups !== false;
-    const commandDmAllowFrom = kind === "direct" ? effectiveAllowFrom : normalizedAllowFrom;
+    const commandDmAllowFrom = kind === "direct" ? effectiveAllowFrom : configAllowFrom;
     const senderAllowedForCommands = isMattermostSenderAllowed({
       senderId,
       senderName,
@@ -908,8 +929,9 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     }
     const kind = channelKind(channelInfo.type);
 
-    // Enforce DM/group policy and allowlist checks (same as normal messages)
     const dmPolicy = account.config.dmPolicy ?? "pairing";
+    const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
+    const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
     const storeAllowFrom = normalizeMattermostAllowList(
       await readStoreAllowFromForDmPolicy({
         provider: "mattermost",
@@ -938,24 +960,10 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         logVerboseMessage(
           `mattermost: drop reaction (dmPolicy=${dmPolicy} sender=${userId} reason=${reactionAccess.reason})`,
         );
-        const { effectiveGroupAllowFrom } = resolveMattermostEffectiveAllowlists({
-          configAllowFrom,
-          configGroupAllowFrom,
-          storeAllowFrom,
-        });
-        // Drop when allowlist is empty (same as normal message handler)
-        const allowed =
-          effectiveGroupAllowFrom.length > 0 &&
-          isSenderAllowed({
-            senderId: userId,
-            senderName,
-            allowFrom: effectiveGroupAllowFrom,
-            allowNameMatching,
-          });
-        if (!allowed) {
-          logVerboseMessage(`mattermost: drop reaction (groupPolicy=allowlist sender=${userId})`);
-          return;
-        }
+      } else {
+        logVerboseMessage(
+          `mattermost: drop reaction (groupPolicy=${groupPolicy} sender=${userId} reason=${reactionAccess.reason} channel=${channelId})`,
+        );
       }
       return;
     }
