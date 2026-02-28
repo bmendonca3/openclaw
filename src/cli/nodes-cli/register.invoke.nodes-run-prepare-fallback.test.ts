@@ -28,15 +28,16 @@ const nodeListResponse = {
   ],
 };
 
+let prepareErrorMessage =
+  'node command not allowed: the node (platform: macos) does not support "system.run.prepare"';
+
 const callGateway = vi.fn(async (opts: GatewayCall) => {
   if (opts.method === "node.list") {
     return nodeListResponse;
   }
   if (opts.method === "node.invoke") {
     if (opts.params?.command === "system.run.prepare") {
-      throw new Error(
-        'node command not allowed: the node (platform: macos) does not support "system.run.prepare"',
-      );
+      throw new Error(prepareErrorMessage);
     }
     return {
       payload: {
@@ -98,6 +99,8 @@ describe("nodes run prepare fallback (#29171)", () => {
 
   beforeEach(() => {
     callGateway.mockClear();
+    prepareErrorMessage =
+      'node command not allowed: the node (platform: macos) does not support "system.run.prepare"';
     nodeListResponse.nodes[0] = {
       nodeId: "mac-1",
       displayName: "Mac",
@@ -163,6 +166,61 @@ describe("nodes run prepare fallback (#29171)", () => {
   });
 
   it("falls back when the node omits commands and rejects system.run.prepare anyway", async () => {
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      connected: true,
+      permissions: { screenRecording: true },
+    };
+
+    const program = new Command();
+    program.exitOverride();
+    registerNodesCli(program);
+
+    await program.parseAsync(["nodes", "run", "--node", "mac-1", "echo", "hi"], {
+      from: "user",
+    });
+
+    const invokeCommands = callGateway.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.method === "node.invoke")
+      .map((entry) => entry.params?.command);
+
+    expect(invokeCommands).toEqual(["system.run.prepare", "system.run"]);
+  });
+
+  it("falls back when the node says it did not declare any supported commands", async () => {
+    prepareErrorMessage =
+      "node command not allowed: the node did not declare any supported commands";
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      connected: true,
+      permissions: { screenRecording: true },
+    };
+
+    const program = new Command();
+    program.exitOverride();
+    registerNodesCli(program);
+
+    await program.parseAsync(["nodes", "run", "--node", "mac-1", "echo", "hi"], {
+      from: "user",
+    });
+
+    const invokeCommands = callGateway.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.method === "node.invoke")
+      .map((entry) => entry.params?.command);
+
+    expect(invokeCommands).toEqual(["system.run.prepare", "system.run"]);
+  });
+
+  it("falls back when the node host returns a generic unsupported-command error", async () => {
+    prepareErrorMessage = "command not supported";
     nodeListResponse.nodes[0] = {
       nodeId: "mac-1",
       displayName: "Mac",

@@ -171,9 +171,19 @@ function toPreparedNodesRunContext(
 
 function isUnsupportedNodeCommandError(error: unknown, command: string): boolean {
   const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  const normalized = message.toLowerCase();
+  if (normalized.includes("command not supported")) {
+    return true;
+  }
+  if (!normalized.includes("node command not allowed")) {
+    return false;
+  }
+  if (normalized.includes("did not declare any supported commands")) {
+    return true;
+  }
   return (
-    message.includes("node command not allowed") &&
-    message.includes(`does not support "${command}"`)
+    normalized.includes(command.toLowerCase()) &&
+    (normalized.includes("does not support") || normalized.includes("not in the allowlist"))
   );
 }
 
