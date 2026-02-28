@@ -20,6 +20,7 @@ const TYPING_EMOJI = "Typing"; // Typing indicator emoji
  * @see https://open.feishu.cn/document/server-docs/api-call-guide/generic-error-code
  */
 const FEISHU_BACKOFF_CODES = new Set([99991400, 99991403, 429]);
+const FEISHU_TYPING_TARGET_GONE_CODES = new Set([230011, 231003]);
 
 /**
  * Custom error class for Feishu backoff conditions detected from non-throwing
@@ -31,6 +32,15 @@ export class FeishuBackoffError extends Error {
   constructor(code: number) {
     super(`Feishu API backoff: code ${code}`);
     this.name = "FeishuBackoffError";
+    this.code = code;
+  }
+}
+
+export class FeishuTypingStopError extends Error {
+  code: number;
+  constructor(code: number) {
+    super(`Feishu typing stop: code ${code}`);
+    this.name = "FeishuTypingStopError";
     this.code = code;
   }
 }
@@ -73,6 +83,24 @@ export function isFeishuBackoffError(err: unknown): boolean {
   return false;
 }
 
+export function isFeishuTypingStopError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) {
+    return false;
+  }
+
+  const responseCode = (err as { response?: { data?: { code?: number } } }).response?.data?.code;
+  if (typeof responseCode === "number" && FEISHU_TYPING_TARGET_GONE_CODES.has(responseCode)) {
+    return true;
+  }
+
+  const code = (err as { code?: number }).code;
+  if (typeof code === "number" && FEISHU_TYPING_TARGET_GONE_CODES.has(code)) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Check whether a Feishu SDK response object contains a backoff error code.
  *
@@ -91,6 +119,17 @@ export function getBackoffCodeFromResponse(response: unknown): number | undefine
   return undefined;
 }
 
+export function getTypingStopCodeFromResponse(response: unknown): number | undefined {
+  if (typeof response !== "object" || response === null) {
+    return undefined;
+  }
+  const code = (response as { code?: number }).code;
+  if (typeof code === "number" && FEISHU_TYPING_TARGET_GONE_CODES.has(code)) {
+    return code;
+  }
+  return undefined;
+}
+
 /**
  * Add a typing indicator (reaction) to a message.
  *
@@ -98,7 +137,8 @@ export function getBackoffCodeFromResponse(response: unknown): number | undefine
  * `createTypingCallbacks` (typing-start-guard) can trip and stop the
  * keepalive loop. See #28062.
  *
- * Also checks for backoff codes in non-throwing SDK responses (#28157).
+ * Also checks for backoff and terminal target-gone codes in non-throwing SDK
+ * responses so deleted/withdrawn reply targets stop the keepalive loop.
  */
 export async function addTypingIndicator(params: {
   cfg: ClawdbotConfig;
@@ -134,13 +174,23 @@ export async function addTypingIndicator(params: {
       throw new FeishuBackoffError(backoffCode);
     }
 
+    const stopCode = getTypingStopCodeFromResponse(response);
+    if (stopCode !== undefined) {
+      if (getFeishuRuntime().logging.shouldLogVerbose()) {
+        runtime?.log?.(
+          `[feishu] typing indicator target unavailable (code ${stopCode}), stopping keepalive`,
+        );
+      }
+      throw new FeishuTypingStopError(stopCode);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK response type
     const reactionId = (response as any)?.data?.reaction_id ?? null;
     return { messageId, reactionId };
   } catch (err) {
-    if (isFeishuBackoffError(err)) {
+    if (isFeishuBackoffError(err) || isFeishuTypingStopError(err)) {
       if (getFeishuRuntime().logging.shouldLogVerbose()) {
-        runtime?.log?.("[feishu] typing indicator hit rate-limit/quota, stopping keepalive");
+        runtime?.log?.("[feishu] typing indicator keepalive stopped due to terminal API error");
       }
       throw err;
     }
@@ -155,7 +205,8 @@ export async function addTypingIndicator(params: {
 /**
  * Remove a typing indicator (reaction) from a message.
  *
- * Rate-limit and quota errors are re-thrown for the same reason as above.
+ * Rate-limit, quota, and target-gone errors are re-thrown for the same
+ * reason as above.
  */
 export async function removeTypingIndicator(params: {
   cfg: ClawdbotConfig;
@@ -193,12 +244,20 @@ export async function removeTypingIndicator(params: {
       }
       throw new FeishuBackoffError(backoffCode);
     }
-  } catch (err) {
-    if (isFeishuBackoffError(err)) {
+
+    const stopCode = getTypingStopCodeFromResponse(result);
+    if (stopCode !== undefined) {
       if (getFeishuRuntime().logging.shouldLogVerbose()) {
         runtime?.log?.(
-          "[feishu] typing indicator removal hit rate-limit/quota, stopping keepalive",
+          `[feishu] typing indicator removal target unavailable (code ${stopCode}), stopping keepalive`,
         );
+      }
+      throw new FeishuTypingStopError(stopCode);
+    }
+  } catch (err) {
+    if (isFeishuBackoffError(err) || isFeishuTypingStopError(err)) {
+      if (getFeishuRuntime().logging.shouldLogVerbose()) {
+        runtime?.log?.("[feishu] typing indicator removal stopped due to terminal API error");
       }
       throw err;
     }

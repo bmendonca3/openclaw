@@ -208,6 +208,24 @@ describe("sendMediaFeishu msg_type routing", () => {
     );
   });
 
+  it("falls back to a direct send when the reply target was withdrawn", async () => {
+    messageReplyMock.mockResolvedValueOnce({
+      code: 230011,
+      msg: "The message was withdrawn.",
+    });
+
+    await sendMediaFeishu({
+      cfg: {} as any,
+      to: "user:ou_target",
+      mediaBuffer: Buffer.from("video"),
+      fileName: "reply.mp4",
+      replyToMessageId: "om_parent",
+    });
+
+    expect(messageReplyMock).toHaveBeenCalledTimes(1);
+    expect(messageCreateMock).toHaveBeenCalledTimes(1);
+  });
+
   it("omits reply_in_thread when replyInThread is false", async () => {
     await sendMediaFeishu({
       cfg: {} as any,

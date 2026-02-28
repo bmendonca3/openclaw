@@ -55,6 +55,9 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
 
   let typingState: TypingIndicatorState | null = null;
   const typingCallbacks = createTypingCallbacks({
+    // Deleted/withdrawn reply targets should stop Feishu typing immediately
+    // instead of spending another keepalive interval on the same dead message.
+    maxConsecutiveFailures: 1,
     start: async () => {
       // Check if typing indicator is enabled (default: true)
       if (!(account.config.typingIndicator ?? true)) {

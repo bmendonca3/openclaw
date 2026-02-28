@@ -116,6 +116,31 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
     expect(addTypingIndicatorMock).not.toHaveBeenCalled();
   });
 
+  it("stops Feishu typing retries immediately when the reply target is unavailable", async () => {
+    vi.useFakeTimers();
+    try {
+      addTypingIndicatorMock.mockRejectedValueOnce(
+        Object.assign(new Error("The message is not found"), { code: 231003 }),
+      );
+
+      createFeishuReplyDispatcher({
+        cfg: {} as never,
+        agentId: "agent",
+        runtime: { log: vi.fn() } as never,
+        chatId: "oc_chat",
+        replyToMessageId: "om_deleted",
+      });
+
+      const options = createReplyDispatcherWithTypingMock.mock.calls[0]?.[0];
+      await options.onReplyStart?.();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(addTypingIndicatorMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps auto mode plain text on non-streaming send path", async () => {
     createFeishuReplyDispatcher({
       cfg: {} as never,

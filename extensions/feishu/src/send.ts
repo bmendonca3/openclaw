@@ -4,7 +4,12 @@ import { createFeishuClient } from "./client.js";
 import type { MentionTarget } from "./mention.js";
 import { buildMentionedMessage, buildMentionedCardContent } from "./mention.js";
 import { getFeishuRuntime } from "./runtime.js";
-import { assertFeishuMessageApiSuccess, toFeishuSendResult } from "./send-result.js";
+import {
+  assertFeishuMessageApiSuccess,
+  isFeishuReplyTargetGone,
+  toFeishuSendResult,
+  type FeishuMessageApiResponse,
+} from "./send-result.js";
 import { resolveFeishuSendTarget } from "./send-target.js";
 import type { FeishuSendResult } from "./types.js";
 
@@ -139,6 +144,42 @@ function buildFeishuPostMessagePayload(params: { messageText: string }): {
   };
 }
 
+async function sendWithReplyFallback(params: {
+  replyToMessageId?: string;
+  sendReply: () => Promise<FeishuMessageApiResponse>;
+  sendCreate: () => Promise<FeishuMessageApiResponse>;
+  replyErrorPrefix: string;
+  createErrorPrefix: string;
+  receiveId: string;
+}): Promise<FeishuSendResult> {
+  const {
+    replyToMessageId,
+    sendReply,
+    sendCreate,
+    replyErrorPrefix,
+    createErrorPrefix,
+    receiveId,
+  } = params;
+
+  if (replyToMessageId) {
+    try {
+      const response = await sendReply();
+      if (!isFeishuReplyTargetGone(response)) {
+        assertFeishuMessageApiSuccess(response, replyErrorPrefix);
+        return toFeishuSendResult(response, receiveId);
+      }
+    } catch (err) {
+      if (!isFeishuReplyTargetGone(err)) {
+        throw err;
+      }
+    }
+  }
+
+  const response = await sendCreate();
+  assertFeishuMessageApiSuccess(response, createErrorPrefix);
+  return toFeishuSendResult(response, receiveId);
+}
+
 export async function sendMessageFeishu(
   params: SendFeishuMessageParams,
 ): Promise<FeishuSendResult> {
@@ -157,30 +198,30 @@ export async function sendMessageFeishu(
   const messageText = getFeishuRuntime().channel.text.convertMarkdownTables(rawText, tableMode);
 
   const { content, msgType } = buildFeishuPostMessagePayload({ messageText });
-
-  if (replyToMessageId) {
-    const response = await client.im.message.reply({
-      path: { message_id: replyToMessageId },
-      data: {
-        content,
-        msg_type: msgType,
-        ...(replyInThread ? { reply_in_thread: true } : {}),
-      },
-    });
-    assertFeishuMessageApiSuccess(response, "Feishu reply failed");
-    return toFeishuSendResult(response, receiveId);
-  }
-
-  const response = await client.im.message.create({
-    params: { receive_id_type: receiveIdType },
-    data: {
-      receive_id: receiveId,
-      content,
-      msg_type: msgType,
-    },
+  return sendWithReplyFallback({
+    replyToMessageId,
+    sendReply: () =>
+      client.im.message.reply({
+        path: { message_id: replyToMessageId as string },
+        data: {
+          content,
+          msg_type: msgType,
+          ...(replyInThread ? { reply_in_thread: true } : {}),
+        },
+      }),
+    sendCreate: () =>
+      client.im.message.create({
+        params: { receive_id_type: receiveIdType },
+        data: {
+          receive_id: receiveId,
+          content,
+          msg_type: msgType,
+        },
+      }),
+    replyErrorPrefix: "Feishu reply failed",
+    createErrorPrefix: "Feishu send failed",
+    receiveId,
   });
-  assertFeishuMessageApiSuccess(response, "Feishu send failed");
-  return toFeishuSendResult(response, receiveId);
 }
 
 export type SendFeishuCardParams = {
@@ -197,30 +238,30 @@ export async function sendCardFeishu(params: SendFeishuCardParams): Promise<Feis
   const { cfg, to, card, replyToMessageId, replyInThread, accountId } = params;
   const { client, receiveId, receiveIdType } = resolveFeishuSendTarget({ cfg, to, accountId });
   const content = JSON.stringify(card);
-
-  if (replyToMessageId) {
-    const response = await client.im.message.reply({
-      path: { message_id: replyToMessageId },
-      data: {
-        content,
-        msg_type: "interactive",
-        ...(replyInThread ? { reply_in_thread: true } : {}),
-      },
-    });
-    assertFeishuMessageApiSuccess(response, "Feishu card reply failed");
-    return toFeishuSendResult(response, receiveId);
-  }
-
-  const response = await client.im.message.create({
-    params: { receive_id_type: receiveIdType },
-    data: {
-      receive_id: receiveId,
-      content,
-      msg_type: "interactive",
-    },
+  return sendWithReplyFallback({
+    replyToMessageId,
+    sendReply: () =>
+      client.im.message.reply({
+        path: { message_id: replyToMessageId as string },
+        data: {
+          content,
+          msg_type: "interactive",
+          ...(replyInThread ? { reply_in_thread: true } : {}),
+        },
+      }),
+    sendCreate: () =>
+      client.im.message.create({
+        params: { receive_id_type: receiveIdType },
+        data: {
+          receive_id: receiveId,
+          content,
+          msg_type: "interactive",
+        },
+      }),
+    replyErrorPrefix: "Feishu card reply failed",
+    createErrorPrefix: "Feishu card send failed",
+    receiveId,
   });
-  assertFeishuMessageApiSuccess(response, "Feishu card send failed");
-  return toFeishuSendResult(response, receiveId);
 }
 
 export async function updateCardFeishu(params: {
