@@ -1,6 +1,6 @@
 import type * as Lark from "@larksuiteoapi/node-sdk";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { resolveFeishuAccount } from "./accounts.js";
+import { resolveDefaultFeishuAccountId, resolveFeishuAccount } from "./accounts.js";
 import { createFeishuClient } from "./client.js";
 import { resolveToolsConfig } from "./tools-config.js";
 import type { FeishuToolsConfig, ResolvedFeishuAccount } from "./types.js";
@@ -24,7 +24,8 @@ export function resolveFeishuToolAccount(params: {
     cfg: params.api.config,
     accountId:
       normalizeOptionalAccountId(params.executeParams?.accountId) ??
-      normalizeOptionalAccountId(params.defaultAccountId),
+      normalizeOptionalAccountId(params.defaultAccountId) ??
+      resolveDefaultFeishuAccountId(params.api.config),
   });
 }
 

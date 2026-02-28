@@ -108,4 +108,33 @@ describe("feishu tool account routing", () => {
     expect(createFeishuClientMock.mock.calls[0]?.[0]?.appId).toBe("app-b");
     expect(createFeishuClientMock.mock.calls[1]?.[0]?.appId).toBe("app-a");
   });
+
+  test("wiki tool falls back to channels.feishu.defaultAccount when agentAccountId is missing", async () => {
+    const cfg = {
+      channels: {
+        feishu: {
+          enabled: true,
+          defaultAccount: "b",
+          accounts: {
+            a: {
+              appId: "app-a",
+              appSecret: "sec-a",
+            },
+            b: {
+              appId: "app-b",
+              appSecret: "sec-b",
+            },
+          },
+        },
+      },
+    } as OpenClawPluginApi["config"];
+
+    const { api, resolveTool } = createToolFactoryHarness(cfg);
+    registerFeishuWikiTools(api);
+
+    const tool = resolveTool("feishu_wiki");
+    await tool.execute("call", { action: "search" });
+
+    expect(createFeishuClientMock.mock.calls.at(-1)?.[0]?.appId).toBe("app-b");
+  });
 });

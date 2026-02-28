@@ -191,6 +191,7 @@ export const FeishuAccountConfigSchema = z
 export const FeishuConfigSchema = z
   .object({
     enabled: z.boolean().optional(),
+    defaultAccount: z.string().optional(),
     // Top-level credentials (backward compatible for single-account mode)
     appId: z.string().optional(),
     appSecret: z.string().optional(),

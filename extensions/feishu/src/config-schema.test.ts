@@ -138,3 +138,19 @@ describe("FeishuConfigSchema optimization flags", () => {
     expect(result.accounts?.main?.resolveSenderNames).toBe(false);
   });
 });
+
+describe("FeishuConfigSchema defaultAccount", () => {
+  it("accepts a top-level defaultAccount", () => {
+    const result = FeishuConfigSchema.parse({
+      defaultAccount: "main",
+      accounts: {
+        main: {
+          appId: "cli_main",
+          appSecret: "secret_main",
+        },
+      },
+    });
+
+    expect(result.defaultAccount).toBe("main");
+  });
+});
