@@ -56,6 +56,8 @@ const NOTIFY_DELIVERIES = ["system", "overlay", "auto"] as const;
 const NOTIFICATIONS_ACTIONS = ["open", "dismiss", "reply"] as const;
 const CAMERA_FACING = ["front", "back", "both"] as const;
 const LOCATION_ACCURACY = ["coarse", "balanced", "precise"] as const;
+const SCREEN_RECORD_DEFAULT_DURATION_MS = 10_000;
+const SCREEN_RECORD_MAX_DURATION_MS = 60_000;
 const NODE_READ_ACTION_COMMANDS = {
   camera_list: "camera.list",
   notifications_list: "notifications.list",
@@ -94,6 +96,19 @@ function extractPairingRequestId(message: string): string | null {
   }
   const value = (match[1] ?? "").trim();
   return value.length > 0 ? value : null;
+}
+
+function resolveScreenRecordDurationMs(params: Record<string, unknown>): number {
+  const durationMs =
+    typeof params.durationMs === "number" && Number.isFinite(params.durationMs)
+      ? params.durationMs
+      : typeof params.duration === "string"
+        ? parseDurationMs(params.duration)
+        : SCREEN_RECORD_DEFAULT_DURATION_MS;
+  if (durationMs > SCREEN_RECORD_MAX_DURATION_MS) {
+    throw new Error(`screen_record durationMs must be at most ${SCREEN_RECORD_MAX_DURATION_MS}`);
+  }
+  return durationMs;
 }
 
 // Flattened schema: runtime validates per-action requirements.
@@ -419,13 +434,8 @@ export function createNodesTool(options?: {
           }
           case "screen_record": {
             const node = readStringParam(params, "node", { required: true });
+            const durationMs = resolveScreenRecordDurationMs(params);
             const nodeId = await resolveNodeId(gatewayOpts, node);
-            const durationMs =
-              typeof params.durationMs === "number" && Number.isFinite(params.durationMs)
-                ? params.durationMs
-                : typeof params.duration === "string"
-                  ? parseDurationMs(params.duration)
-                  : 10_000;
             const fps =
               typeof params.fps === "number" && Number.isFinite(params.fps) ? params.fps : 10;
             const screenIndex =
