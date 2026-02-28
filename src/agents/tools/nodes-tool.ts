@@ -63,6 +63,8 @@ const MEDIA_INVOKE_ACTIONS = {
   "photos.latest": "photos_latest",
   "screen.record": "screen_record",
 } as const;
+const SCREEN_RECORD_DEFAULT_DURATION_MS = 10_000;
+const SCREEN_RECORD_MAX_DURATION_MS = 60_000;
 const NODE_READ_ACTION_COMMANDS = {
   camera_list: "camera.list",
   notifications_list: "notifications.list",
@@ -103,6 +105,19 @@ function extractPairingRequestId(message: string): string | null {
   return value.length > 0 ? value : null;
 }
 
+function resolveScreenRecordDurationMs(params: Record<string, unknown>): number {
+  const durationMs =
+    typeof params.durationMs === "number" && Number.isFinite(params.durationMs)
+      ? params.durationMs
+      : typeof params.duration === "string"
+        ? parseDurationMs(params.duration)
+        : SCREEN_RECORD_DEFAULT_DURATION_MS;
+  if (durationMs > SCREEN_RECORD_MAX_DURATION_MS) {
+    throw new Error(`screen_record durationMs must be at most ${SCREEN_RECORD_MAX_DURATION_MS}`);
+  }
+  return durationMs;
+}
+
 // Flattened schema: runtime validates per-action requirements.
 const NodesToolSchema = Type.Object({
   action: stringEnum(NODES_TOOL_ACTIONS),
@@ -127,7 +142,7 @@ const NodesToolSchema = Type.Object({
   deviceId: Type.Optional(Type.String()),
   limit: Type.Optional(Type.Number()),
   duration: Type.Optional(Type.String()),
-  durationMs: Type.Optional(Type.Number({ maximum: 300_000 })),
+  durationMs: Type.Optional(Type.Number({ maximum: SCREEN_RECORD_MAX_DURATION_MS })),
   includeAudio: Type.Optional(Type.Boolean()),
   // screen_record
   fps: Type.Optional(Type.Number()),
@@ -530,15 +545,8 @@ export function createNodesTool(options?: {
           }
           case "screen_record": {
             const node = readStringParam(params, "node", { required: true });
+            const durationMs = resolveScreenRecordDurationMs(params);
             const nodeId = await resolveNodeId(gatewayOpts, node);
-            const durationMs = Math.min(
-              typeof params.durationMs === "number" && Number.isFinite(params.durationMs)
-                ? params.durationMs
-                : typeof params.duration === "string"
-                  ? parseDurationMs(params.duration)
-                  : 10_000,
-              300_000,
-            );
             const fps =
               typeof params.fps === "number" && Number.isFinite(params.fps) ? params.fps : 10;
             const screenIndex =

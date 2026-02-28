@@ -15,7 +15,7 @@ const screenMocks = vi.hoisted(() => ({
   parseScreenRecordPayload: vi.fn(() => ({
     base64: "ZmFrZQ==",
     format: "mp4",
-    durationMs: 300_000,
+    durationMs: 60_000,
     fps: 10,
     screenIndex: 0,
     hasAudio: true,
@@ -53,7 +53,7 @@ describe("createNodesTool screen_record duration guardrails", () => {
     screenMocks.writeScreenRecordToFile.mockClear();
   });
 
-  it("caps durationMs schema at 300000", () => {
+  it("caps durationMs schema at 60000", () => {
     const tool = createNodesTool();
     const schema = tool.parameters as {
       properties?: {
@@ -62,27 +62,34 @@ describe("createNodesTool screen_record duration guardrails", () => {
         };
       };
     };
-    expect(schema.properties?.durationMs?.maximum).toBe(300_000);
+    expect(schema.properties?.durationMs?.maximum).toBe(60_000);
   });
 
-  it("clamps screen_record durationMs argument to 300000 before gateway invoke", async () => {
-    gatewayMocks.callGatewayTool.mockResolvedValue({ payload: { ok: true } });
+  it("rejects durationMs values above 60000 before gateway invoke", async () => {
     const tool = createNodesTool();
 
-    await tool.execute("call-1", {
-      action: "screen_record",
-      node: "macbook",
-      durationMs: 900_000,
-    });
-
-    expect(gatewayMocks.callGatewayTool).toHaveBeenCalledWith(
-      "node.invoke",
-      {},
-      expect.objectContaining({
-        params: expect.objectContaining({
-          durationMs: 300_000,
-        }),
+    await expect(
+      tool.execute("call-screen-record-too-long-ms", {
+        action: "screen_record",
+        node: "ios-node",
+        durationMs: 3_600_000,
       }),
-    );
+    ).rejects.toThrow("screen_record durationMs must be at most 60000");
+
+    expect(gatewayMocks.callGatewayTool).not.toHaveBeenCalled();
+  });
+
+  it("rejects parsed duration strings above 60000 before gateway invoke", async () => {
+    const tool = createNodesTool();
+
+    await expect(
+      tool.execute("call-screen-record-too-long-duration", {
+        action: "screen_record",
+        node: "ios-node",
+        duration: "1h",
+      }),
+    ).rejects.toThrow("screen_record durationMs must be at most 60000");
+
+    expect(gatewayMocks.callGatewayTool).not.toHaveBeenCalled();
   });
 });
