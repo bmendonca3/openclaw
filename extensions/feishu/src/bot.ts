@@ -1161,12 +1161,13 @@ export async function handleFeishuMessage(params: {
       ...mediaPayload,
     });
 
+    const replyTargetMessageId = ctx.rootId ?? ctx.messageId;
     const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
       cfg,
       agentId: route.agentId,
       runtime: runtime as RuntimeEnv,
       chatId: ctx.chatId,
-      replyToMessageId: ctx.messageId,
+      replyToMessageId: replyTargetMessageId,
       skipReplyToInMessages: !isGroup,
       replyInThread,
       rootId: ctx.rootId,
