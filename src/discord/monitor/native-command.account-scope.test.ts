@@ -56,7 +56,11 @@ describe("discord native command pairing account scope", () => {
 
     await command.run(interaction);
 
-    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("discord", undefined, "work");
+    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith(
+      "discord",
+      expect.any(Object),
+      "work",
+    );
     expect(upsertChannelPairingRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "discord",

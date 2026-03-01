@@ -147,7 +147,7 @@ describe("agent components", () => {
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]?.[0]?.content).toContain("Pairing code: PAIRCODE");
     expect(enqueueSystemEventMock).not.toHaveBeenCalled();
-    expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", undefined, "default");
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", expect.any(Object), "default");
     expect(upsertPairingRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "discord",

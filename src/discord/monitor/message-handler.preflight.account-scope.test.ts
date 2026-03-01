@@ -75,7 +75,11 @@ describe("discord preflight pairing account scope", () => {
     });
 
     expect(result).toBeNull();
-    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("discord", undefined, "work");
+    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith(
+      "discord",
+      expect.any(Object),
+      "work",
+    );
     expect(upsertChannelPairingRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "discord",
