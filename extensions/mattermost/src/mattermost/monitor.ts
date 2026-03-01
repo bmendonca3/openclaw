@@ -153,7 +153,7 @@ function normalizeAllowList(entries: Array<string | number>): string[] {
   return Array.from(new Set(normalized));
 }
 
-function resolveMattermostEffectiveAllowlists(params: {
+function resolveMattermostEffectiveAllowFromLists(params: {
   configAllowFrom: string[];
   configGroupAllowFrom: string[];
   storeAllowFrom: string[];
@@ -172,6 +172,8 @@ function resolveMattermostEffectiveAllowlists(params: {
   );
   return { effectiveAllowFrom, effectiveGroupAllowFrom };
 }
+
+const resolveMattermostEffectiveAllowlists = resolveMattermostEffectiveAllowFromLists;
 
 function isSenderAllowed(params: {
   senderId: string;
@@ -451,11 +453,12 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
           allowNameMatching,
         }),
     });
-    const { effectiveAllowFrom, effectiveGroupAllowFrom } = resolveMattermostEffectiveAllowlists({
-      configAllowFrom,
-      configGroupAllowFrom,
-      storeAllowFrom,
-    });
+    const { effectiveAllowFrom, effectiveGroupAllowFrom } =
+      resolveMattermostEffectiveAllowFromLists({
+        configAllowFrom,
+        configGroupAllowFrom,
+        storeAllowFrom,
+      });
     const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
       cfg,
       surface: "mattermost",
