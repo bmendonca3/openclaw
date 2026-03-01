@@ -109,18 +109,19 @@ function resolveInstallDefaultChoice(params: {
   localPath?: string | null;
 }): InstallChoice {
   const { cfg, entry, localPath } = params;
+  const entryDefault = entry.install.defaultChoice;
+  if (entryDefault === "npm") {
+    return "npm";
+  }
+  if (entryDefault === "local") {
+    return localPath ? "local" : "npm";
+  }
+
   const updateChannel = cfg.update?.channel;
   if (updateChannel === "dev") {
     return localPath ? "local" : "npm";
   }
   if (updateChannel === "stable" || updateChannel === "beta") {
-    return "npm";
-  }
-  const entryDefault = entry.install.defaultChoice;
-  if (entryDefault === "local") {
-    return localPath ? "local" : "npm";
-  }
-  if (entryDefault === "npm") {
     return "npm";
   }
   return localPath ? "local" : "npm";

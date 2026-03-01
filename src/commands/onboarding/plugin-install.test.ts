@@ -68,6 +68,27 @@ async function runInitialValueForChannel(channel: "dev" | "beta") {
   return call?.[0]?.initialValue;
 }
 
+async function runInitialValueForEntry(params: {
+  channel: "dev" | "beta";
+  entry: ChannelPluginCatalogEntry;
+}) {
+  const runtime = makeRuntime();
+  const select = vi.fn((async <T extends string>() => "skip" as T) as WizardPrompter["select"]);
+  const prompter = makePrompter({ select: select as unknown as WizardPrompter["select"] });
+  const cfg: OpenClawConfig = { update: { channel: params.channel } };
+  mockRepoLocalPathExists();
+
+  await ensureOnboardingPluginInstalled({
+    cfg,
+    entry: params.entry,
+    prompter,
+    runtime,
+  });
+
+  const call = select.mock.calls[0];
+  return call?.[0]?.initialValue;
+}
+
 function expectPluginLoadedFromLocalPath(
   result: Awaited<ReturnType<typeof ensureOnboardingPluginInstalled>>,
 ) {
@@ -134,6 +155,23 @@ describe("ensureOnboardingPluginInstalled", () => {
 
   it("defaults to npm on beta channel even when local path exists", async () => {
     expect(await runInitialValueForChannel("beta")).toBe("npm");
+  });
+
+  it("respects entry defaultChoice=npm even on dev channel", async () => {
+    const entryWithNpmDefault: ChannelPluginCatalogEntry = {
+      ...baseEntry,
+      install: {
+        ...baseEntry.install,
+        defaultChoice: "npm",
+      },
+    };
+
+    expect(
+      await runInitialValueForEntry({
+        channel: "dev",
+        entry: entryWithNpmDefault,
+      }),
+    ).toBe("npm");
   });
 
   it("falls back to local path after npm install failure", async () => {
