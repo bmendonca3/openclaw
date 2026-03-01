@@ -218,6 +218,18 @@ function resolveBrowserBaseUrl(params: {
   return undefined;
 }
 
+function readTargetUrlParam(params: Record<string, unknown>): string {
+  const targetUrl = readStringParam(params, "targetUrl");
+  if (targetUrl) {
+    return targetUrl;
+  }
+  const urlAlias = readStringParam(params, "url");
+  if (urlAlias) {
+    return urlAlias;
+  }
+  return readStringParam(params, "targetUrl", { required: true });
+}
+
 export function createBrowserTool(opts?: {
   sandboxBridgeUrl?: string;
   allowHostControl?: boolean;
@@ -382,9 +394,7 @@ export function createBrowserTool(opts?: {
             };
           }
         case "open": {
-          const targetUrl = readStringParam(params, "targetUrl", {
-            required: true,
-          });
+          const targetUrl = readTargetUrlParam(params);
           if (proxyRequest) {
             const result = await proxyRequest({
               method: "POST",
@@ -612,9 +622,7 @@ export function createBrowserTool(opts?: {
           });
         }
         case "navigate": {
-          const targetUrl = readStringParam(params, "targetUrl", {
-            required: true,
-          });
+          const targetUrl = readTargetUrlParam(params);
           const targetId = readStringParam(params, "targetId");
           if (proxyRequest) {
             const result = await proxyRequest({

@@ -86,6 +86,8 @@ export const BrowserToolSchema = Type.Object({
   node: Type.Optional(Type.String()),
   profile: Type.Optional(Type.String()),
   targetUrl: Type.Optional(Type.String()),
+  // Alias accepted for open/navigate parity with CLI-style payloads.
+  url: Type.Optional(Type.String()),
   targetId: Type.Optional(Type.String()),
   limit: Type.Optional(Type.Number()),
   maxChars: Type.Optional(Type.Number()),
