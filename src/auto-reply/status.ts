@@ -48,7 +48,16 @@ import {
 import type { CommandCategory } from "./commands-registry.types.js";
 import { resolveActiveFallbackState } from "./fallback-state.js";
 import { formatProviderModelRef, resolveSelectedAndActiveModel } from "./model-runtime.js";
-import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "./thinking.js";
+import {
+  normalizeElevatedLevel,
+  normalizeReasoningLevel,
+  normalizeThinkLevel,
+  normalizeVerboseLevel,
+  type ElevatedLevel,
+  type ReasoningLevel,
+  type ThinkLevel,
+  type VerboseLevel,
+} from "./thinking.js";
 
 type AgentDefaults = NonNullable<NonNullable<OpenClawConfig["agents"]>["defaults"]>;
 type AgentConfig = Partial<AgentDefaults> & {
@@ -506,12 +515,21 @@ export function buildStatusMessage(args: StatusArgs): string {
     }
   }
 
-  const thinkLevel = args.resolvedThink ?? args.agent?.thinkingDefault ?? "off";
-  const verboseLevel = args.resolvedVerbose ?? args.agent?.verboseDefault ?? "off";
-  const reasoningLevel = args.resolvedReasoning ?? "off";
+  const thinkLevel =
+    args.resolvedThink ??
+    normalizeThinkLevel(args.sessionEntry?.thinkingLevel) ??
+    args.agent?.thinkingDefault ??
+    "off";
+  const verboseLevel =
+    args.resolvedVerbose ??
+    normalizeVerboseLevel(args.sessionEntry?.verboseLevel) ??
+    args.agent?.verboseDefault ??
+    "off";
+  const reasoningLevel =
+    args.resolvedReasoning ?? normalizeReasoningLevel(args.sessionEntry?.reasoningLevel) ?? "off";
   const elevatedLevel =
     args.resolvedElevated ??
-    args.sessionEntry?.elevatedLevel ??
+    normalizeElevatedLevel(args.sessionEntry?.elevatedLevel) ??
     args.agent?.elevatedDefault ??
     "on";
 
