@@ -115,8 +115,22 @@ describe("mattermost pairing store account scoping", () => {
 
   it("does not authorize DM sender from another account's pairing-store entry", async () => {
     const readAllowFromStore = vi.fn(
-      async (_channel: string, _env?: NodeJS.ProcessEnv, accountId?: string) =>
-        accountId === "beta" ? [] : ["attacker"],
+      async (
+        channelOrParams:
+          | string
+          | {
+              channel?: string;
+              accountId?: string;
+            },
+        _env?: NodeJS.ProcessEnv,
+        accountId?: string,
+      ) => {
+        const scopedAccountId =
+          typeof channelOrParams === "object" && channelOrParams !== null
+            ? channelOrParams.accountId
+            : accountId;
+        return scopedAccountId === "beta" ? [] : ["attacker"];
+      },
     );
     const upsertPairingRequest = vi.fn(async () => ({ code: "PAIRME99", created: true }));
 
@@ -255,7 +269,12 @@ describe("mattermost pairing store account scoping", () => {
 
     await run;
 
-    expect(readAllowFromStore).toHaveBeenCalledWith("mattermost", undefined, "beta");
+    expect(readAllowFromStore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "mattermost",
+        accountId: "beta",
+      }),
+    );
     expect(upsertPairingRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "mattermost",
