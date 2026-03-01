@@ -173,7 +173,7 @@ describe("nodes run prepare fallback (#29171)", () => {
       caps: [],
       connected: true,
       permissions: { screenRecording: true },
-    };
+    } as (typeof nodeListResponse.nodes)[number];
 
     const program = new Command();
     program.exitOverride();
@@ -201,7 +201,7 @@ describe("nodes run prepare fallback (#29171)", () => {
       caps: [],
       connected: true,
       permissions: { screenRecording: true },
-    };
+    } as (typeof nodeListResponse.nodes)[number];
 
     const program = new Command();
     program.exitOverride();
@@ -228,7 +228,7 @@ describe("nodes run prepare fallback (#29171)", () => {
       caps: [],
       connected: true,
       permissions: { screenRecording: true },
-    };
+    } as (typeof nodeListResponse.nodes)[number];
 
     const program = new Command();
     program.exitOverride();
