@@ -142,3 +142,33 @@ export function listEnabledFeishuAccounts(cfg: ClawdbotConfig): ResolvedFeishuAc
     .map((accountId) => resolveFeishuAccount({ cfg, accountId }))
     .filter((account) => account.enabled && account.configured);
 }
+
+function readConfiguredDefaultAccountId(cfg: ClawdbotConfig): string | undefined {
+  const defaultAccount = (cfg.channels?.feishu as { defaultAccount?: unknown } | undefined)
+    ?.defaultAccount;
+  if (typeof defaultAccount !== "string") {
+    return undefined;
+  }
+  const trimmed = defaultAccount.trim();
+  return trimmed || undefined;
+}
+
+/**
+ * Resolve the account that should be used by Feishu tool integrations.
+ * Prefers channels.feishu.defaultAccount when that account is enabled/configured.
+ */
+export function resolvePreferredFeishuToolAccount(
+  cfg: ClawdbotConfig,
+): ResolvedFeishuAccount | null {
+  const accounts = listEnabledFeishuAccounts(cfg);
+  if (accounts.length === 0) {
+    return null;
+  }
+
+  const preferredId = readConfiguredDefaultAccountId(cfg);
+  if (!preferredId) {
+    return accounts[0];
+  }
+
+  return accounts.find((account) => account.accountId === preferredId) ?? accounts[0];
+}
