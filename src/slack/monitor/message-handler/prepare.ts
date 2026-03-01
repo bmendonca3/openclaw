@@ -133,7 +133,11 @@ export async function prepareSlackMessage(params: {
     return null;
   }
 
-  const { allowFromLower } = await resolveSlackEffectiveAllowFrom(ctx);
+  const allowFromScope =
+    ctx.accountId === account.accountId ? ctx : { ...ctx, accountId: account.accountId };
+  const { allowFromLower } = await resolveSlackEffectiveAllowFrom(allowFromScope, {
+    includePairingStore: isDirectMessage,
+  });
   const ownerAllowFromLower = isRoomish
     ? normalizeAllowListLower(normalizeAllowList(ctx.allowFrom))
     : allowFromLower;

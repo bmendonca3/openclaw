@@ -14,14 +14,23 @@ import type { SlackMonitorContext } from "../context.js";
 import { createSlackMonitorContext } from "../context.js";
 import { prepareSlackMessage } from "./prepare.js";
 
-const { readChannelAllowFromStoreMock, upsertChannelPairingRequestMock } = vi.hoisted(() => ({
+const {
+  readChannelAllowFromStoreMock,
+  readStoreAllowFromForDmPolicyMock,
+  upsertChannelPairingRequestMock,
+} = vi.hoisted(() => ({
   readChannelAllowFromStoreMock: vi.fn(async () => [] as string[]),
+  readStoreAllowFromForDmPolicyMock: vi.fn(async () => [] as string[]),
   upsertChannelPairingRequestMock: vi.fn(async () => ({ code: "PAIR", created: false })),
 }));
 
 vi.mock("../../../pairing/pairing-store.js", () => ({
   readChannelAllowFromStore: readChannelAllowFromStoreMock,
   upsertChannelPairingRequest: upsertChannelPairingRequestMock,
+}));
+
+vi.mock("../../../security/dm-policy-shared.js", () => ({
+  readStoreAllowFromForDmPolicy: readStoreAllowFromForDmPolicyMock,
 }));
 
 describe("slack prepareSlackMessage inbound contract", () => {
@@ -209,7 +218,7 @@ describe("slack prepareSlackMessage inbound contract", () => {
   });
 
   it("scopes DM pairing-store checks and requests to accountId", async () => {
-    readChannelAllowFromStoreMock.mockResolvedValueOnce([]);
+    readStoreAllowFromForDmPolicyMock.mockResolvedValueOnce([]);
     upsertChannelPairingRequestMock.mockResolvedValueOnce({ code: "PAIR", created: false });
 
     const slackCtx = createInboundSlackCtx({
@@ -232,7 +241,11 @@ describe("slack prepareSlackMessage inbound contract", () => {
     );
 
     expect(prepared).toBeNull();
-    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "default");
+    expect(readStoreAllowFromForDmPolicyMock).toHaveBeenCalledWith({
+      provider: "slack",
+      accountId: "default",
+      dmPolicy: "pairing",
+    });
     expect(upsertChannelPairingRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "slack",
@@ -763,7 +776,7 @@ describe("prepareSlackMessage sender prefix", () => {
   });
 
   it("blocks channel control commands for senders authorized only via DM pairing store", async () => {
-    readChannelAllowFromStoreMock.mockResolvedValueOnce(["U1"]);
+    readStoreAllowFromForDmPolicyMock.mockResolvedValueOnce(["U1"]);
 
     const ctx = createSenderPrefixCtx({
       channels: { dm: { enabled: true, policy: "pairing", allowFrom: ["U_OWNER"] } },
@@ -781,6 +794,10 @@ describe("prepareSlackMessage sender prefix", () => {
     const result = await prepareSenderPrefixMessage(ctx, "<@BOT> /new", "1700000000.0003");
 
     expect(result).toBeNull();
-    expect(readChannelAllowFromStoreMock).toHaveBeenCalledWith("slack", undefined, "default");
+    expect(readStoreAllowFromForDmPolicyMock).toHaveBeenCalledWith({
+      provider: "slack",
+      accountId: "default",
+      dmPolicy: "pairing",
+    });
   });
 });
