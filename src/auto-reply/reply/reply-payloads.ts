@@ -165,9 +165,13 @@ function normalizeProviderForComparison(value?: string): string | undefined {
 export function shouldSuppressMessagingToolReplies(params: {
   messageProvider?: string;
   messagingToolSentTargets?: MessagingToolSend[];
+  commandSource?: "text" | "native";
   originatingTo?: string;
   accountId?: string;
 }): boolean {
+  if (params.commandSource === "native") {
+    return false;
+  }
   const provider = normalizeProviderForComparison(params.messageProvider);
   if (!provider) {
     return false;

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { filterMessagingToolMediaDuplicates } from "./reply-payloads.js";
+import {
+  filterMessagingToolMediaDuplicates,
+  shouldSuppressMessagingToolReplies,
+} from "./reply-payloads.js";
 
 describe("filterMessagingToolMediaDuplicates", () => {
   it("strips mediaUrl when it matches sentMediaUrls", () => {
@@ -73,5 +76,18 @@ describe("filterMessagingToolMediaDuplicates", () => {
       sentMediaUrls: ["file:///tmp/photo%20one.jpg"],
     });
     expect(result).toEqual([{ text: "hello", mediaUrl: undefined, mediaUrls: undefined }]);
+  });
+});
+
+describe("shouldSuppressMessagingToolReplies", () => {
+  it("does not suppress native command replies for same provider/target sends", () => {
+    const result = shouldSuppressMessagingToolReplies({
+      messageProvider: "discord",
+      originatingTo: "channel:C1",
+      commandSource: "native",
+      messagingToolSentTargets: [{ tool: "discord", provider: "discord", to: "channel:C1" }],
+    });
+
+    expect(result).toBe(false);
   });
 });

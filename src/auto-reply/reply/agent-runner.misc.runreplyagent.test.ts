@@ -872,7 +872,11 @@ describe("runReplyAgent claude-cli routing", () => {
 describe("runReplyAgent messaging tool suppression", () => {
   function createRun(
     messageProvider = "slack",
-    opts: { storePath?: string; sessionKey?: string } = {},
+    opts: {
+      storePath?: string;
+      sessionKey?: string;
+      sessionCtx?: Partial<TemplateContext>;
+    } = {},
   ) {
     const typing = createMockTypingController();
     const sessionKey = opts.sessionKey ?? "main";
@@ -881,6 +885,7 @@ describe("runReplyAgent messaging tool suppression", () => {
       OriginatingTo: "channel:C1",
       AccountId: "primary",
       MessageSid: "msg",
+      ...opts.sessionCtx,
     } as unknown as TemplateContext;
     const resolvedQueue = { mode: "interrupt" } as unknown as QueueSettings;
     const followupRun = {
@@ -990,6 +995,26 @@ describe("runReplyAgent messaging tool suppression", () => {
     const result = await createRun("slack");
 
     expect(result).toMatchObject({ text: "hello world!" });
+  });
+
+  it("keeps native discord command replies even when message tool sends to same channel", async () => {
+    runEmbeddedPiAgentMock.mockResolvedValueOnce({
+      payloads: [{ text: "✅ done" }],
+      messagingToolSentTexts: ["test"],
+      messagingToolSentTargets: [{ tool: "discord", provider: "discord", to: "channel:C1" }],
+      meta: {},
+    });
+
+    const result = await createRun("discord", {
+      sessionCtx: {
+        Surface: "discord",
+        OriginatingChannel: "discord",
+        CommandSource: "native",
+        To: "interaction:abc123",
+      },
+    });
+
+    expect(result).toMatchObject({ text: "✅ done" });
   });
 
   it("persists usage fields even when replies are suppressed", async () => {

@@ -37,6 +37,7 @@ export function buildReplyPayloads(params: {
   messagingToolSentTargets?: Parameters<
     typeof shouldSuppressMessagingToolReplies
   >[0]["messagingToolSentTargets"];
+  commandSource?: Parameters<typeof shouldSuppressMessagingToolReplies>[0]["commandSource"];
   originatingChannel?: OriginatingChannelType;
   originatingTo?: string;
   accountId?: string;
@@ -97,6 +98,7 @@ export function buildReplyPayloads(params: {
       provider: params.messageProvider,
     }),
     messagingToolSentTargets,
+    commandSource: params.commandSource,
     originatingTo: resolveOriginMessageTo({
       originatingTo: params.originatingTo,
     }),
