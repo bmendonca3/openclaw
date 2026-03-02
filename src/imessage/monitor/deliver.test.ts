@@ -149,4 +149,25 @@ describe("deliverReplies", () => {
       messageId: "imsg-1",
     });
   });
+
+  it("normalizes handle targets for sent-message cache scope", async () => {
+    const remember = vi.fn();
+
+    await deliverReplies({
+      replies: [{ text: "hello" }],
+      target: "imessage:+1 (555) 555-0123",
+      client,
+      accountId: "acct-4",
+      runtime,
+      maxBytes: 2048,
+      textLimit: 4000,
+      sentMessageCache: { remember },
+    });
+
+    expect(remember).toHaveBeenCalledWith("acct-4:imessage:+15555550123", { text: "hello" });
+    expect(remember).toHaveBeenCalledWith("acct-4:imessage:+15555550123", {
+      text: "hello",
+      messageId: "imsg-1",
+    });
+  });
 });

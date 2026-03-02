@@ -6,7 +6,22 @@ import { convertMarkdownTables } from "../../markdown/tables.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { createIMessageRpcClient } from "../client.js";
 import { sendMessageIMessage } from "../send.js";
+import { normalizeIMessageHandle, parseIMessageTarget } from "../targets.js";
 import type { SentMessageCache } from "./echo-cache.js";
+
+function buildSentMessageScope(accountId: string | undefined, target: string): string {
+  const parsedTarget = parseIMessageTarget(target);
+  if (parsedTarget.kind === "chat_id") {
+    return `${accountId ?? ""}:chat_id:${parsedTarget.chatId}`;
+  }
+  if (parsedTarget.kind === "chat_guid") {
+    return `${accountId ?? ""}:chat_guid:${parsedTarget.chatGuid}`;
+  }
+  if (parsedTarget.kind === "chat_identifier") {
+    return `${accountId ?? ""}:chat_identifier:${parsedTarget.chatIdentifier}`;
+  }
+  return `${accountId ?? ""}:imessage:${normalizeIMessageHandle(parsedTarget.to)}`;
+}
 
 export async function deliverReplies(params: {
   replies: ReplyPayload[];
@@ -20,7 +35,7 @@ export async function deliverReplies(params: {
 }) {
   const { replies, target, client, runtime, maxBytes, textLimit, accountId, sentMessageCache } =
     params;
-  const scope = `${accountId ?? ""}:${target}`;
+  const scope = buildSentMessageScope(accountId, target);
   const cfg = loadConfig();
   const tableMode = resolveMarkdownTableMode({
     cfg,
