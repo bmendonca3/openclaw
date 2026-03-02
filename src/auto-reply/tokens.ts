@@ -38,12 +38,18 @@ export function isSilentReplyPrefixText(
   if (!trimmed) {
     return false;
   }
-  // Keep suppression narrow: only fully-uppercase token-like fragments
-  // are treated as silent prefixes ("NO", "NO_", ...), while natural
-  // language starts like "No" continue to stream normally.
+  // Keep suppression narrow: treat only unmistakable token fragments
+  // (exact token or underscore-delimited prefixes like "NO_") as silent.
   if (/[^A-Z_]/.test(trimmed)) {
     return false;
   }
   const normalized = trimmed.toUpperCase();
-  return token.toUpperCase().startsWith(normalized);
+  const normalizedToken = token.toUpperCase();
+  if (normalized === normalizedToken) {
+    return true;
+  }
+  if (!normalized.includes("_")) {
+    return false;
+  }
+  return normalizedToken.startsWith(normalized);
 }

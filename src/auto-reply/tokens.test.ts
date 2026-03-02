@@ -75,8 +75,6 @@ describe("stripSilentToken", () => {
 
 describe("isSilentReplyPrefixText", () => {
   it("matches uppercase token prefixes", () => {
-    expect(isSilentReplyPrefixText("N")).toBe(true);
-    expect(isSilentReplyPrefixText("NO")).toBe(true);
     expect(isSilentReplyPrefixText("NO_")).toBe(true);
     expect(isSilentReplyPrefixText("NO_RE")).toBe(true);
     expect(isSilentReplyPrefixText("NO_REPLY")).toBe(true);
@@ -86,6 +84,8 @@ describe("isSilentReplyPrefixText", () => {
   it("rejects ambiguous natural-language prefixes", () => {
     expect(isSilentReplyPrefixText("No")).toBe(false);
     expect(isSilentReplyPrefixText("Hello")).toBe(false);
+    expect(isSilentReplyPrefixText("N")).toBe(false);
+    expect(isSilentReplyPrefixText("NO")).toBe(false);
   });
 
   it("rejects non-prefixes and mixed characters", () => {
