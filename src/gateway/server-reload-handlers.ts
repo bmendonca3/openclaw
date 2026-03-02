@@ -16,9 +16,11 @@ import {
 } from "../infra/restart.js";
 import { setCommandLaneConcurrency, getTotalQueueSize } from "../process/command-queue.js";
 import { CommandLane } from "../process/lanes.js";
+import { startChannelHealthMonitor, type ChannelHealthMonitor } from "./channel-health-monitor.js";
 import type { ChannelKind, GatewayReloadPlan } from "./config-reload.js";
 import { resolveHooksConfig } from "./hooks.js";
 import { startBrowserControlServerIfEnabled } from "./server-browser.js";
+import type { ChannelManager } from "./server-channels.js";
 import { buildGatewayCronService, type GatewayCronState } from "./server-cron.js";
 
 type GatewayHotReloadState = {
@@ -26,6 +28,7 @@ type GatewayHotReloadState = {
   heartbeatRunner: HeartbeatRunner;
   cronState: GatewayCronState;
   browserControl: Awaited<ReturnType<typeof startBrowserControlServerIfEnabled>> | null;
+  channelHealthMonitor: ChannelHealthMonitor | null;
 };
 
 export function createGatewayReloadHandlers(params: {
@@ -33,6 +36,7 @@ export function createGatewayReloadHandlers(params: {
   broadcast: (event: string, payload: unknown, opts?: { dropIfSlow?: boolean }) => void;
   getState: () => GatewayHotReloadState;
   setState: (state: GatewayHotReloadState) => void;
+  channelManager: ChannelManager;
   startChannel: (name: ChannelKind) => Promise<void>;
   stopChannel: (name: ChannelKind) => Promise<void>;
   logHooks: {
@@ -63,6 +67,18 @@ export function createGatewayReloadHandlers(params: {
 
     if (plan.restartHeartbeat) {
       nextState.heartbeatRunner.updateConfig(nextConfig);
+    }
+
+    if (plan.restartChannelHealthMonitor) {
+      state.channelHealthMonitor?.stop();
+      const healthCheckMinutes = nextConfig.gateway?.channelHealthCheckMinutes;
+      const healthCheckDisabled = healthCheckMinutes === 0;
+      nextState.channelHealthMonitor = healthCheckDisabled
+        ? null
+        : startChannelHealthMonitor({
+            channelManager: params.channelManager,
+            checkIntervalMs: (healthCheckMinutes ?? 5) * 60_000,
+          });
     }
 
     resetDirectoryCache();

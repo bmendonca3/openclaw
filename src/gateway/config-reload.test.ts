@@ -165,6 +165,13 @@ describe("buildGatewayReloadPlan", () => {
     expect(plan.noopPaths).toContain("gateway.remote.url");
   });
 
+  it("hot-reloads channel health monitor when channelHealthCheckMinutes changes", () => {
+    const plan = buildGatewayReloadPlan(["gateway.channelHealthCheckMinutes"]);
+    expect(plan.restartGateway).toBe(false);
+    expect(plan.restartChannelHealthMonitor).toBe(true);
+    expect(plan.hotReasons).toContain("gateway.channelHealthCheckMinutes");
+  });
+
   it("treats secrets config changes as no-op for gateway restart planning", () => {
     const plan = buildGatewayReloadPlan(["secrets.providers.default.path"]);
     expect(plan.restartGateway).toBe(false);

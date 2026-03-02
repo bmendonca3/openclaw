@@ -37,6 +37,13 @@ const hoisted = vi.hoisted(() => {
     updateConfig: heartbeatUpdateConfig,
   }));
 
+  const channelHealthMonitorStops: Array<ReturnType<typeof vi.fn>> = [];
+  const startChannelHealthMonitor = vi.fn(() => {
+    const stop = vi.fn();
+    channelHealthMonitorStops.push(stop);
+    return { stop };
+  });
+
   const startGmailWatcher = vi.fn(async () => ({ started: true }));
   const stopGmailWatcher = vi.fn(async () => {});
 
@@ -132,6 +139,8 @@ const hoisted = vi.hoisted(() => {
     heartbeatStop,
     heartbeatUpdateConfig,
     startHeartbeatRunner,
+    startChannelHealthMonitor,
+    channelHealthMonitorStops,
     startGmailWatcher,
     stopGmailWatcher,
     providerManager,
@@ -153,6 +162,10 @@ vi.mock("./server-browser.js", () => ({
 
 vi.mock("../infra/heartbeat-runner.js", () => ({
   startHeartbeatRunner: hoisted.startHeartbeatRunner,
+}));
+
+vi.mock("./channel-health-monitor.js", () => ({
+  startChannelHealthMonitor: hoisted.startChannelHealthMonitor,
 }));
 
 vi.mock("../hooks/gmail-watcher.js", () => ({
@@ -318,6 +331,7 @@ describe("gateway hot reload", () => {
           restartBrowserControl: true,
           restartCron: true,
           restartHeartbeat: true,
+          restartChannelHealthMonitor: false,
           restartChannels: new Set(["whatsapp", "telegram", "discord", "signal", "imessage"]),
           noopPaths: [],
         },
@@ -368,6 +382,7 @@ describe("gateway hot reload", () => {
           restartBrowserControl: false,
           restartCron: false,
           restartHeartbeat: false,
+          restartChannelHealthMonitor: false,
           restartChannels: new Set(),
           noopPaths: [],
         },
@@ -376,6 +391,41 @@ describe("gateway hot reload", () => {
       await Promise.resolve(restartResult);
 
       expect(signalSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("stops channel health monitor when channelHealthCheckMinutes is hot-reloaded to 0", async () => {
+    const startCallsBefore = hoisted.startChannelHealthMonitor.mock.calls.length;
+    const monitorStopsBefore = hoisted.channelHealthMonitorStops.length;
+    await withGatewayServer(async () => {
+      expect(hoisted.startChannelHealthMonitor.mock.calls.length).toBe(startCallsBefore + 1);
+      expect(hoisted.channelHealthMonitorStops.length).toBe(monitorStopsBefore + 1);
+      const currentMonitorStop = hoisted.channelHealthMonitorStops.at(-1);
+      expect(currentMonitorStop).toBeTypeOf("function");
+      expect(currentMonitorStop).not.toHaveBeenCalled();
+
+      const onHotReload = hoisted.getOnHotReload();
+      expect(onHotReload).toBeTypeOf("function");
+
+      await onHotReload?.(
+        {
+          changedPaths: ["gateway.channelHealthCheckMinutes"],
+          restartGateway: false,
+          restartReasons: [],
+          hotReasons: ["gateway.channelHealthCheckMinutes"],
+          reloadHooks: false,
+          restartGmailWatcher: false,
+          restartBrowserControl: false,
+          restartCron: false,
+          restartHeartbeat: false,
+          restartChannelHealthMonitor: true,
+          restartChannels: new Set(),
+          noopPaths: [],
+        },
+        { gateway: { channelHealthCheckMinutes: 0 } },
+      );
+
+      expect(currentMonitorStop).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -417,6 +467,7 @@ describe("gateway hot reload", () => {
         restartBrowserControl: false,
         restartCron: false,
         restartHeartbeat: false,
+        restartChannelHealthMonitor: false,
         restartChannels: new Set(),
         noopPaths: [],
       };
