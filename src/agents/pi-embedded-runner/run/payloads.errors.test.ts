@@ -128,6 +128,16 @@ describe("buildEmbeddedRunPayloads", () => {
     expect(payloads[0]?.text).toBe("Perfeito, @jarbas! 👊");
   });
 
+  it("does not replace fragments on non-prefix substring overlap", () => {
+    const payloads = buildPayloads({
+      assistantTexts: ["error", "server error"],
+      lastAssistant: makeStoppedAssistant(),
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]?.text).toBe("errorserver error");
+  });
+
   it("adds a fallback error when a tool fails and no assistant output exists", () => {
     const payloads = buildPayloads({
       lastToolError: { toolName: "browser", error: "tab not found" },

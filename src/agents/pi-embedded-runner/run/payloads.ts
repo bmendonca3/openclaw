@@ -55,12 +55,12 @@ function coalesceAssistantTexts(chunks: string[]): string {
     }
     // Some providers emit incremental snapshots ("Per" -> "Perfeito"), while
     // others emit hard fragments ("Per" + "feito"). Prefer the longer snapshot
-    // when one contains the other; otherwise append the fragment.
-    if (chunk.startsWith(merged) || chunk.includes(merged)) {
+    // only for prefix growth; otherwise append the fragment.
+    if (chunk.startsWith(merged)) {
       merged = chunk;
       continue;
     }
-    if (merged.startsWith(chunk) || merged.includes(chunk)) {
+    if (merged.startsWith(chunk)) {
       continue;
     }
     merged += chunk;
