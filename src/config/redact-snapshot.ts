@@ -3,6 +3,7 @@ import JSON5 from "json5";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { isSensitiveConfigPath, type ConfigUiHints } from "./schema.hints.js";
 import type { ConfigFileSnapshot } from "./types.openclaw.js";
+import { isSecretRef } from "./types.secrets.js";
 
 const log = createSubsystemLogger("config/redaction");
 const ENV_VAR_PLACEHOLDER_PATTERN = /^\$\{[^}]*\}$/;
@@ -27,7 +28,7 @@ function isWholeObjectSensitivePath(path: string): boolean {
 function isSecretRefShape(
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & { source: string; id: string } {
-  return typeof value.source === "string" && typeof value.id === "string";
+  return isSecretRef(value);
 }
 
 function redactSecretRef(
@@ -409,7 +410,7 @@ export function redactConfigSnapshot(
     redactedRaw &&
     shouldFallbackToStructuredRawRedaction({
       redactedRaw,
-      originalConfig: snapshot.config,
+      originalConfig: snapshot.parsed ?? snapshot.config,
       hints: uiHints,
     })
   ) {

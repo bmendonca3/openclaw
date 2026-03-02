@@ -274,6 +274,32 @@ describe("redactConfigSnapshot", () => {
     expect(restored.gateway.auth.password).toBe("local");
   });
 
+  it("keeps text redaction raw when parsed/config shapes differ by defaults", () => {
+    const raw = `{
+  // preserve this comment
+  gateway: { auth: { password: "local" } }
+}`;
+    const snapshot: ConfigFileSnapshot = {
+      path: "/home/user/.openclaw/config.json5",
+      exists: true,
+      raw,
+      parsed: { gateway: { auth: { password: "local" } } },
+      resolved: {},
+      valid: true,
+      config: { gateway: { mode: "local", auth: { password: "local" } } },
+      hash: "abc123",
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    };
+
+    const result = redactConfigSnapshot(snapshot, mainSchemaHints);
+    expect(result.raw).toContain("preserve this comment");
+    expect(result.raw).toContain(REDACTED_SENTINEL);
+    const parsed = JSON5.parse(result.raw ?? "{}");
+    expect(parsed.gateway.auth.password).toBe(REDACTED_SENTINEL);
+  });
+
   it("preserves SecretRef structural fields while redacting SecretRef id", () => {
     const config = {
       models: {
@@ -295,6 +321,25 @@ describe("redactConfigSnapshot", () => {
     expect(parsed.models?.providers?.default?.apiKey?.provider).toBe("default");
     const restored = restoreRedactedValues(parsed, snapshot.config, mainSchemaHints);
     expect(restored).toEqual(snapshot.config);
+  });
+
+  it("fully redacts non-SecretRef sensitive objects that include source/id keys", () => {
+    const config = {
+      channels: {
+        googlechat: {
+          serviceAccount: {
+            source: "external",
+            id: "not-a-secret-ref",
+            private_key: "top-secret-private-key",
+          },
+        },
+      },
+    };
+    const snapshot = makeSnapshot(config, JSON.stringify(config, null, 2));
+    const result = redactConfigSnapshot(snapshot, mainSchemaHints);
+    const channels = result.config.channels as Record<string, Record<string, unknown>>;
+    expect(channels.googlechat.serviceAccount).toBe(REDACTED_SENTINEL);
+    expect(result.raw).not.toContain("top-secret-private-key");
   });
 
   it("handles overlap fallback and SecretRef in the same snapshot", () => {
