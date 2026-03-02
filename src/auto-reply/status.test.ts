@@ -334,6 +334,31 @@ describe("buildStatusMessage", () => {
     expect(normalized).not.toContain("(rate limit)");
   });
 
+  it("prefers latest runtime model when selected model drifts without fallback state", () => {
+    const text = buildStatusMessage({
+      agent: {
+        model: "github-copilot/claude-haiku-4-5",
+        contextTokens: 32_000,
+      },
+      sessionEntry: {
+        sessionId: "runtime-drift-no-fallback",
+        updatedAt: 0,
+        modelProvider: "minimax-portal",
+        model: "MiniMax-M2.5",
+      },
+      sessionKey: "agent:main:discord:channel:123",
+      sessionScope: "per-sender",
+      queue: { mode: "collect", depth: 0 },
+      modelAuth: "oauth",
+      activeModelAuth: "api-key",
+    });
+
+    const normalized = normalizeTestText(text);
+    expect(normalized).toContain("Model: minimax-portal/MiniMax-M2.5");
+    expect(normalized).toContain("latest run");
+    expect(normalized).not.toContain("Fallback:");
+  });
+
   it("omits active lines when runtime matches selected model", () => {
     const text = buildStatusMessage({
       agent: {

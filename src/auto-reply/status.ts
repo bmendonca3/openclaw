@@ -609,6 +609,12 @@ export function buildStatusMessage(args: StatusArgs): string {
   const costLabel = showCost && hasUsage ? formatUsd(cost) : undefined;
 
   const selectedAuthLabel = selectedAuthLabelValue ? ` · 🔑 ${selectedAuthLabelValue}` : "";
+  const hasFallbackHints = Boolean(
+    entry?.fallbackNoticeSelectedModel?.trim() || entry?.fallbackNoticeActiveModel?.trim(),
+  );
+  const hasManualModelOverride = Boolean(
+    entry?.providerOverride?.trim() || entry?.modelOverride?.trim(),
+  );
   const channelModelNote = (() => {
     if (!args.config || !entry) {
       return undefined;
@@ -647,8 +653,23 @@ export function buildStatusMessage(args: StatusArgs): string {
     }
     return "channel override";
   })();
-  const modelNote = channelModelNote ? ` · ${channelModelNote}` : "";
-  const modelLine = `🧠 Model: ${selectedModelLabel}${selectedAuthLabel}${modelNote}`;
+  const shouldPreferRuntimeModel =
+    modelRefs.activeDiffers && !hasFallbackHints && !hasManualModelOverride;
+  const displayedModelLabel = shouldPreferRuntimeModel ? activeModelLabel : selectedModelLabel;
+  const displayedAuthLabel = shouldPreferRuntimeModel
+    ? activeAuthLabelValue
+      ? ` · 🔑 ${activeAuthLabelValue}`
+      : ""
+    : selectedAuthLabel;
+  const modelNoteParts: string[] = [];
+  if (channelModelNote) {
+    modelNoteParts.push(channelModelNote);
+  }
+  if (shouldPreferRuntimeModel) {
+    modelNoteParts.push("latest run");
+  }
+  const modelNote = modelNoteParts.length > 0 ? ` · ${modelNoteParts.join(" · ")}` : "";
+  const modelLine = `🧠 Model: ${displayedModelLabel}${displayedAuthLabel}${modelNote}`;
   const showFallbackAuth = activeAuthLabelValue && activeAuthLabelValue !== selectedAuthLabelValue;
   const fallbackLine = fallbackState.active
     ? `↪️ Fallback: ${activeModelLabel}${
