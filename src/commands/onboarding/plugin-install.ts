@@ -110,11 +110,14 @@ function resolveInstallDefaultChoice(params: {
 }): InstallChoice {
   const { cfg, entry, localPath } = params;
   const entryDefault = entry.install.defaultChoice;
-  if (entryDefault === "npm") {
-    return "npm";
-  }
-  if (entryDefault === "local") {
-    return localPath ? "local" : "npm";
+  const hasExplicitEntryDefault = entry.install.explicitDefaultChoice === true;
+  if (hasExplicitEntryDefault) {
+    if (entryDefault === "npm") {
+      return "npm";
+    }
+    if (entryDefault === "local") {
+      return localPath ? "local" : "npm";
+    }
   }
 
   const updateChannel = cfg.update?.channel;

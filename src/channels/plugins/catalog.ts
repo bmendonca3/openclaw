@@ -30,6 +30,7 @@ export type ChannelPluginCatalogEntry = {
     npmSpec: string;
     localPath?: string;
     defaultChoice?: "npm" | "local";
+    explicitDefaultChoice?: boolean;
   };
 };
 
@@ -183,10 +184,12 @@ function resolveInstallInfo(params: {
     localPath = path.relative(params.workspaceDir, params.packageDir) || undefined;
   }
   const defaultChoice = params.manifest.install?.defaultChoice ?? (localPath ? "local" : "npm");
+  const explicitDefaultChoice = params.manifest.install?.defaultChoice !== undefined;
   return {
     npmSpec,
     ...(localPath ? { localPath } : {}),
     ...(defaultChoice ? { defaultChoice } : {}),
+    ...(explicitDefaultChoice ? { explicitDefaultChoice: true } : {}),
   };
 }
 

@@ -163,6 +163,7 @@ describe("ensureOnboardingPluginInstalled", () => {
       install: {
         ...baseEntry.install,
         defaultChoice: "npm",
+        explicitDefaultChoice: true,
       },
     };
 
@@ -172,6 +173,41 @@ describe("ensureOnboardingPluginInstalled", () => {
         entry: entryWithNpmDefault,
       }),
     ).toBe("npm");
+  });
+
+  it("keeps beta/stable npm default for implicit local catalog defaults", async () => {
+    const entryWithImplicitLocalDefault: ChannelPluginCatalogEntry = {
+      ...baseEntry,
+      install: {
+        ...baseEntry.install,
+        defaultChoice: "local",
+      },
+    };
+
+    expect(
+      await runInitialValueForEntry({
+        channel: "beta",
+        entry: entryWithImplicitLocalDefault,
+      }),
+    ).toBe("npm");
+  });
+
+  it("respects explicit local manifest defaults on beta/stable channels", async () => {
+    const entryWithExplicitLocalDefault: ChannelPluginCatalogEntry = {
+      ...baseEntry,
+      install: {
+        ...baseEntry.install,
+        defaultChoice: "local",
+        explicitDefaultChoice: true,
+      },
+    };
+
+    expect(
+      await runInitialValueForEntry({
+        channel: "beta",
+        entry: entryWithExplicitLocalDefault,
+      }),
+    ).toBe("local");
   });
 
   it("falls back to local path after npm install failure", async () => {
