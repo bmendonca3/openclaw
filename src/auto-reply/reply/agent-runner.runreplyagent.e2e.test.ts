@@ -410,6 +410,12 @@ describe("runReplyAgent typing (heartbeat)", () => {
         shouldType: false,
       },
       {
+        partials: ["NO", "NO_", "NO_RE", "NO_REPLY"],
+        finalText: "NO_REPLY",
+        expectedForwarded: [] as string[],
+        shouldType: false,
+      },
+      {
         partials: ["NO_", "NO_RE", "NO_REPLY"],
         finalText: "NO_REPLY",
         expectedForwarded: [] as string[],
