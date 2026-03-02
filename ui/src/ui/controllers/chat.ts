@@ -134,7 +134,7 @@ function shouldPreferStreamedText(
   if (streamed.length <= normalizedFinal.length) {
     return false;
   }
-  return streamed.includes(normalizedFinal);
+  return streamed.endsWith(normalizedFinal);
 }
 
 export async function sendChatMessage(
