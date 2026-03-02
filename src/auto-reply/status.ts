@@ -662,7 +662,7 @@ export function buildStatusMessage(args: StatusArgs): string {
       : ""
     : selectedAuthLabel;
   const modelNoteParts: string[] = [];
-  if (channelModelNote) {
+  if (channelModelNote && !shouldPreferRuntimeModel) {
     modelNoteParts.push(channelModelNote);
   }
   if (shouldPreferRuntimeModel) {
