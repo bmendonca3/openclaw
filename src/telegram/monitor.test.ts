@@ -91,6 +91,14 @@ function makeRecoverableFetchError() {
   });
 }
 
+function makeGetUpdatesConflictError() {
+  return {
+    error_code: 409,
+    description: "Conflict: terminated by other getUpdates request",
+    method: "getUpdates",
+  };
+}
+
 const createAbortTask = (
   abort: AbortController,
   beforeAbort?: () => void,
@@ -291,6 +299,37 @@ describe("monitorTelegramProvider (grammY)", () => {
     await monitorTelegramProvider({ token: "tok", abortSignal: abort.signal });
 
     expectRecoverableRetryState(2);
+  });
+
+  it("throttles repeated getUpdates conflict retry logs", async () => {
+    const abort = new AbortController();
+    const runtimeError = vi.fn();
+    const conflictError = makeGetUpdatesConflictError();
+
+    runSpy
+      .mockImplementationOnce(() =>
+        makeRunnerStub({
+          task: () => Promise.reject(conflictError),
+        }),
+      )
+      .mockImplementationOnce(() =>
+        makeRunnerStub({
+          task: () => Promise.reject(conflictError),
+        }),
+      )
+      .mockImplementationOnce(() => makeAbortRunner(abort));
+
+    await monitorTelegramProvider({
+      token: "tok",
+      abortSignal: abort.signal,
+      runtime: { log: vi.fn(), error: runtimeError, exit: vi.fn() },
+    });
+
+    const conflictLogs = runtimeError.mock.calls
+      .map((call) => String(call[0] ?? ""))
+      .filter((line) => line.includes("Telegram getUpdates conflict"));
+    expect(conflictLogs).toHaveLength(1);
+    expect(conflictLogs[0]).toContain("retrying in");
   });
 
   it("deletes webhook before starting polling", async () => {

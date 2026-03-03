@@ -60,6 +60,7 @@ const TELEGRAM_POLL_RESTART_POLICY = {
   factor: 1.8,
   jitter: 0.25,
 };
+const GET_UPDATES_CONFLICT_LOG_EVERY = 20;
 
 type TelegramBot = ReturnType<typeof createTelegramBot>;
 
@@ -179,13 +180,17 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
 
     // Use grammyjs/runner for concurrent update processing
     let restartAttempts = 0;
+    let getUpdatesConflictCount = 0;
     let webhookCleared = false;
     const runnerOptions = createTelegramRunnerOptions(cfg);
     const waitBeforeRestart = async (buildLine: (delay: string) => string): Promise<boolean> => {
       restartAttempts += 1;
       const delayMs = computeBackoff(TELEGRAM_POLL_RESTART_POLICY, restartAttempts);
       const delay = formatDurationPrecise(delayMs);
-      log(buildLine(delay));
+      const line = buildLine(delay).trim();
+      if (line) {
+        log(line);
+      }
       try {
         await sleepWithAbort(delayMs, opts.abortSignal);
       } catch (sleepErr) {
@@ -286,6 +291,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       try {
         // runner.task() returns a promise that resolves when the runner stops
         await runner.task();
+        getUpdatesConflictCount = 0;
         if (opts.abortSignal?.aborted) {
           return "exit";
         }
@@ -307,11 +313,24 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
         if (!isConflict && !isRecoverable) {
           throw err;
         }
-        const reason = isConflict ? "getUpdates conflict" : "network error";
         const errMsg = formatErrorMessage(err);
-        const shouldRestart = await waitBeforeRestart(
-          (delay) => `Telegram ${reason}: ${errMsg}; retrying in ${delay}.`,
-        );
+        const shouldRestart = await waitBeforeRestart((delay) => {
+          if (!isConflict) {
+            getUpdatesConflictCount = 0;
+            return `Telegram network error: ${errMsg}; retrying in ${delay}.`;
+          }
+          getUpdatesConflictCount += 1;
+          const shouldIncludeCount =
+            getUpdatesConflictCount > 1 &&
+            getUpdatesConflictCount % GET_UPDATES_CONFLICT_LOG_EVERY === 0;
+          if (shouldIncludeCount) {
+            return `Telegram getUpdates conflict (${getUpdatesConflictCount}x): ${errMsg}; retrying in ${delay}.`;
+          }
+          if (getUpdatesConflictCount === 1) {
+            return `Telegram getUpdates conflict: ${errMsg}; retrying in ${delay}.`;
+          }
+          return "";
+        });
         return shouldRestart ? "continue" : "exit";
       } finally {
         opts.abortSignal?.removeEventListener("abort", stopOnAbort);
