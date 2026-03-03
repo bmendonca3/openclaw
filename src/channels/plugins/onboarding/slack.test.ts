@@ -62,6 +62,8 @@ describe("noteSlackTokenHelp", () => {
     } finally {
       if (ttyDescriptor) {
         Object.defineProperty(process.stdout, "isTTY", ttyDescriptor);
+      } else {
+        delete (process.stdout as { isTTY?: boolean }).isTTY;
       }
     }
 
