@@ -570,6 +570,28 @@ describe("sendChatMessage", () => {
       },
     ]);
   });
+
+  it("drops non-base64 data URLs from attachment payloads", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const state = createState({
+      connected: true,
+      client: { request } as unknown as ChatState["client"],
+    });
+
+    await sendChatMessage(state, "", [
+      {
+        id: "att-1",
+        mimeType: "image/png",
+        dataUrl: "data:text/plain,hello",
+      },
+    ]);
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const payload = request.mock.calls[0]?.[1] as {
+      attachments?: Array<{ mimeType: string; content: string; type: string }>;
+    };
+    expect(payload.attachments).toEqual([]);
+  });
 });
 
 describe("loadChatHistory", () => {

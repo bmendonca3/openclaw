@@ -78,22 +78,14 @@ function dataUrlToBase64(
   dataUrl: string,
   fallbackMimeType?: string,
 ): { content: string; mimeType: string } | null {
-  const match = /^data:([^,]*),(.+)$/.exec(dataUrl);
+  const match = /^data:([^;,]*)(?:;[^,]*)?;base64,(.+)$/i.exec(dataUrl);
   if (!match) {
     return null;
   }
-  const metadata = match[1] ?? "";
   const content = match[2] ?? "";
-  if (!metadata.toLowerCase().includes(";base64")) {
-    return null;
-  }
-  const metadataParts = metadata.split(";");
-  const metadataMime = metadataParts[0]?.trim() ?? "";
+  const metadataMime = (match[1] ?? "").trim();
   const trimmedFallback = fallbackMimeType?.trim() ?? "";
   const mimeType = metadataMime || trimmedFallback || "image/png";
-  if (!content) {
-    return null;
-  }
   return { mimeType, content };
 }
 
