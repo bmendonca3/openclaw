@@ -225,6 +225,28 @@ describe("TuiStreamAssembler", () => {
     expect(revised).toBe("Before tool call\nAfter 1 revised\nAfter 2");
   });
 
+  it("replaces continuation with full snapshot without duplicating pre-tool prefix", () => {
+    const assembler = new TuiStreamAssembler();
+
+    assembler.ingestDelta(
+      "run-post-tool-full-snapshot",
+      messageWithContent([text("Before tool call")]),
+      false,
+    );
+    assembler.ingestDelta(
+      "run-post-tool-full-snapshot",
+      messageWithContent([toolUse(), text("After 1")]),
+      false,
+    );
+
+    const fullSnapshot = assembler.ingestDelta(
+      "run-post-tool-full-snapshot",
+      messageWithContent([text("Before tool call"), text("After 1"), text("After 2")]),
+      false,
+    );
+    expect(fullSnapshot).toBe("Before tool call\nAfter 1\nAfter 2");
+  });
+
   for (const testCase of FINALIZE_BOUNDARY_CASES) {
     it(testCase.name, () => {
       const assembler = new TuiStreamAssembler();

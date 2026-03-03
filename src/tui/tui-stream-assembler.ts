@@ -207,6 +207,12 @@ export class TuiStreamAssembler {
         nextContentBlocks,
       });
       const continuationStart = state.postBoundaryContinuationStart;
+      const priorBoundaryPrefix =
+        continuationStart != null &&
+        continuationStart >= 0 &&
+        continuationStart <= state.contentBlocks.length
+          ? state.contentBlocks.slice(0, continuationStart)
+          : [];
       const existingContinuation =
         continuationStart != null &&
         continuationStart >= 0 &&
@@ -256,10 +262,13 @@ export class TuiStreamAssembler {
         hasContinuationBlockOverlap &&
         continuationStart != null
       ) {
-        state.contentBlocks = [
-          ...state.contentBlocks.slice(0, continuationStart),
-          ...nextContentBlocks,
-        ];
+        const nextIncludesBoundaryPrefix =
+          priorBoundaryPrefix.length > 0 &&
+          nextContentBlocks.length >= priorBoundaryPrefix.length &&
+          priorBoundaryPrefix.every((block, index) => nextContentBlocks[index] === block);
+        state.contentBlocks = nextIncludesBoundaryPrefix
+          ? nextContentBlocks
+          : [...priorBoundaryPrefix, ...nextContentBlocks];
         state.contentText = state.contentBlocks.join("\n");
       } else if (!shouldKeepStreamedBoundaryText) {
         state.contentText = contentText;
