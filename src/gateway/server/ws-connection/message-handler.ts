@@ -78,6 +78,7 @@ import {
 import type { GatewayWsClient } from "../ws-types.js";
 import { resolveConnectAuthDecision, resolveConnectAuthState } from "./auth-context.js";
 import {
+  formatControlUiDeviceIdentityRequiredCloseReason,
   formatControlUiDeviceIdentityRequiredMessage,
   formatGatewayAuthFailureMessage,
   type AuthProvidedKind,
@@ -642,7 +643,7 @@ export function attachGatewayWsMessageHandler(params: {
             sendHandshakeErrorResponse(ErrorCodes.INVALID_REQUEST, errorMessage, {
               details: { code: ConnectErrorDetailCodes.CONTROL_UI_DEVICE_IDENTITY_REQUIRED },
             });
-            close(1008, errorMessage);
+            close(1008, formatControlUiDeviceIdentityRequiredCloseReason());
             return false;
           }
 
