@@ -129,8 +129,9 @@ export function isLocalDirectRequest(
   if (!req) {
     return false;
   }
+  const remoteIsTrustedProxy = isTrustedProxyAddress(req.socket?.remoteAddress, trustedProxies);
   const forwardedHost = headerValue(req.headers?.["x-forwarded-host"]);
-  if (isTailscaleProxyRequest(req) && forwardedHost?.endsWith(".ts.net")) {
+  if (remoteIsTrustedProxy && isTailscaleProxyRequest(req) && forwardedHost?.endsWith(".ts.net")) {
     return true;
   }
   const clientIp = resolveRequestClientIp(req, trustedProxies, allowRealIpFallback) ?? "";
@@ -144,7 +145,6 @@ export function isLocalDirectRequest(
     req.headers?.["x-forwarded-host"],
   );
 
-  const remoteIsTrustedProxy = isTrustedProxyAddress(req.socket?.remoteAddress, trustedProxies);
   return isLocalishHost(req.headers?.host) && (!hasForwarded || remoteIsTrustedProxy);
 }
 

@@ -274,6 +274,10 @@ describe("gateway auth", () => {
     expect(isLocalDirectRequest(createTailscaleForwardedReq(), ["127.0.0.1"])).toBe(true);
   });
 
+  it("does not treat proxied tailscale serve requests as direct without trusted proxies", () => {
+    expect(isLocalDirectRequest(createTailscaleForwardedReq())).toBe(false);
+  });
+
   it("does not treat non-tailscale proxied requests as direct when trusted proxies are configured", () => {
     expect(
       isLocalDirectRequest(
