@@ -590,6 +590,7 @@ describe("agent event handler", () => {
       ts: Date.now(),
       data: {
         text: "HEARTBEAT_OK Read HEARTBEAT.md if it exists (workspace context). Follow it strictly.",
+        mediaUrls: ["https://example.com/hidden-heartbeat-image.png"],
       },
     });
 

@@ -453,8 +453,10 @@ export function createAgentEventHandler({
       if (text && !shouldSuppressSilent) {
         content.push({ type: "text", text });
       }
-      for (const imageUrl of imageUrls) {
-        content.push({ type: "image_url", image_url: { url: imageUrl } });
+      if (!shouldSuppressSilent) {
+        for (const imageUrl of imageUrls) {
+          content.push({ type: "image_url", image_url: { url: imageUrl } });
+        }
       }
       const payload = {
         runId: clientRunId,
