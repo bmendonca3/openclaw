@@ -1,5 +1,6 @@
 import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { generateSecureUuid } from "../infra/secure-random.js";
 import { getChildLogger } from "../logging/logger.js";
 import { redactIdentifier } from "../logging/redact-identifier.js";
