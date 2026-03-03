@@ -96,7 +96,26 @@ function isLikelyImageUrl(url: string): boolean {
   if (/^data:image\//i.test(url)) {
     return true;
   }
-  return /\.(png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i.test(url);
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i.test(url)) {
+    return true;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  if (!/^https?:$/i.test(parsed.protocol)) {
+    return false;
+  }
+
+  const leaf = parsed.pathname.split("/").pop() ?? "";
+  if (!leaf || leaf.includes(".")) {
+    return false;
+  }
+  return true;
 }
 
 function collectAssistantImageUrls(data: Record<string, unknown>): string[] {

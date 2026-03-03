@@ -656,6 +656,7 @@ describe("agent event handler", () => {
         mediaUrls: [
           "https://example.com/cat.png",
           "https://example.com/cat.png",
+          "https://example.com/media/2c6d7fef",
           "https://example.com/file.pdf",
         ],
       },
@@ -678,6 +679,10 @@ describe("agent event handler", () => {
     expect(content).toContainEqual({
       type: "image_url",
       image_url: { url: "https://example.com/cat.png" },
+    });
+    expect(content).toContainEqual({
+      type: "image_url",
+      image_url: { url: "https://example.com/media/2c6d7fef" },
     });
     expect(content).not.toContainEqual({
       type: "image_url",
