@@ -266,6 +266,24 @@ describe("extractAssistantText", () => {
     );
   });
 
+  it("keeps inline code examples of legacy tool_call snippets", () => {
+    const msg = makeAssistantMessage({
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: 'Use `<tool_call>exec tool="exec" command="ls -la /tmp" />` to describe the legacy format.',
+        },
+      ],
+      timestamp: Date.now(),
+    });
+
+    const result = extractAssistantText(msg);
+    expect(result).toBe(
+      'Use `<tool_call>exec tool="exec" command="ls -la /tmp" />` to describe the legacy format.',
+    );
+  });
+
   it("handles multiple invoke blocks in one message", () => {
     const msg = makeAssistantMessage({
       role: "assistant",
