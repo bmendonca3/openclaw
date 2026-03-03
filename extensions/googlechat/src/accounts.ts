@@ -70,6 +70,7 @@ function mergeGoogleChatAccountConfig(
   accountId: string,
 ): GoogleChatAccountConfig {
   const rawChannel = cfg.channels?.["googlechat"];
+  // Guard malformed primitives (`"googlechat": "enabled"`, `42`, etc.) before destructuring.
   const raw =
     rawChannel && typeof rawChannel === "object"
       ? (rawChannel as Record<string, unknown>)

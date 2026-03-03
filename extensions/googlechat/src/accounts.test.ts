@@ -23,6 +23,7 @@ describe("googlechat accounts null-safety", () => {
       const account = resolveGoogleChatAccount({ cfg });
       expect(account.accountId).toBe(DEFAULT_ACCOUNT_ID);
       expect(account.credentialSource).toBe("none");
+      expect(Object.keys(account.config)).toEqual([]);
     } finally {
       if (originalServiceAccount === undefined) {
         delete process.env["GOOGLE_CHAT_SERVICE_ACCOUNT"];
@@ -35,5 +36,21 @@ describe("googlechat accounts null-safety", () => {
         process.env["GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"] = originalServiceAccountFile;
       }
     }
+  });
+
+  it("ignores malformed primitive channels.googlechat values", () => {
+    const cfg = {
+      channels: {
+        googlechat: "enabled",
+      },
+    } as unknown as OpenClawConfig;
+
+    expect(listGoogleChatAccountIds(cfg)).toEqual([DEFAULT_ACCOUNT_ID]);
+    expect(() => resolveGoogleChatAccount({ cfg })).not.toThrow();
+
+    const account = resolveGoogleChatAccount({ cfg });
+    expect(account.accountId).toBe(DEFAULT_ACCOUNT_ID);
+    expect(account.credentialSource).toBe("none");
+    expect(Object.keys(account.config)).toEqual([]);
   });
 });
