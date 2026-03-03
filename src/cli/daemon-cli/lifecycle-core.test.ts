@@ -39,10 +39,11 @@ vi.mock("../../runtime.js", () => ({
 }));
 
 let runServiceRestart: typeof import("./lifecycle-core.js").runServiceRestart;
+let runServiceStart: typeof import("./lifecycle-core.js").runServiceStart;
 
 describe("runServiceRestart token drift", () => {
   beforeAll(async () => {
-    ({ runServiceRestart } = await import("./lifecycle-core.js"));
+    ({ runServiceRestart, runServiceStart } = await import("./lifecycle-core.js"));
   });
 
   beforeEach(() => {
@@ -122,5 +123,41 @@ describe("runServiceRestart token drift", () => {
     const jsonLine = runtimeLogs.find((line) => line.trim().startsWith("{"));
     const payload = JSON.parse(jsonLine ?? "{}") as { warnings?: string[] };
     expect(payload.warnings).toBeUndefined();
+  });
+
+  it("restarts unloaded LaunchAgent services on start", async () => {
+    service.label = "LaunchAgent";
+    service.isLoaded.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await runServiceStart({
+      serviceNoun: "Gateway",
+      service,
+      renderStartHints: () => ["openclaw gateway install --force"],
+      opts: { json: true },
+    });
+
+    expect(service.restart).toHaveBeenCalledTimes(1);
+    const jsonLine = runtimeLogs.find((line) => line.trim().startsWith("{"));
+    const payload = JSON.parse(jsonLine ?? "{}") as { result?: string; ok?: boolean };
+    expect(payload.ok).toBe(true);
+    expect(payload.result).toBe("started");
+  });
+
+  it("keeps non-LaunchAgent start behavior when service is not loaded", async () => {
+    service.label = "TestService";
+    service.isLoaded.mockResolvedValue(false);
+
+    await runServiceStart({
+      serviceNoun: "Gateway",
+      service,
+      renderStartHints: () => ["openclaw gateway install --force"],
+      opts: { json: true },
+    });
+
+    expect(service.restart).not.toHaveBeenCalled();
+    const jsonLine = runtimeLogs.find((line) => line.trim().startsWith("{"));
+    const payload = JSON.parse(jsonLine ?? "{}") as { result?: string; ok?: boolean };
+    expect(payload.ok).toBe(true);
+    expect(payload.result).toBe("not-loaded");
   });
 });
