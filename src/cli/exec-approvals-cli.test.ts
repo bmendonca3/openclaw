@@ -99,7 +99,7 @@ describe("exec approvals CLI", () => {
     expect(runtimeErrors).toHaveLength(0);
   });
 
-  it("defaults allowlist add to wildcard agent", async () => {
+  it("defaults allowlist add to main agent when wildcard requested and no concrete agents exist", async () => {
     const saveExecApprovals = vi.mocked(execApprovals.saveExecApprovals);
     saveExecApprovals.mockClear();
 
@@ -113,7 +113,42 @@ describe("exec approvals CLI", () => {
     expect(saveExecApprovals).toHaveBeenCalledWith(
       expect.objectContaining({
         agents: expect.objectContaining({
-          "*": expect.anything(),
+          main: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it("expands wildcard allowlist add across concrete agents", async () => {
+    localSnapshot.file = {
+      version: 1,
+      agents: {
+        main: {},
+        ops: {},
+        "*": {
+          allowlist: [{ pattern: "/usr/bin/existing", lastUsedAt: Date.now() }],
+        },
+      },
+    };
+
+    const saveExecApprovals = vi.mocked(execApprovals.saveExecApprovals);
+    saveExecApprovals.mockClear();
+
+    await runApprovalsCommand(["approvals", "allowlist", "add", "/usr/bin/uname"]);
+
+    expect(saveExecApprovals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agents: expect.objectContaining({
+          main: expect.objectContaining({
+            allowlist: expect.arrayContaining([
+              expect.objectContaining({ pattern: "/usr/bin/uname" }),
+            ]),
+          }),
+          ops: expect.objectContaining({
+            allowlist: expect.arrayContaining([
+              expect.objectContaining({ pattern: "/usr/bin/uname" }),
+            ]),
+          }),
         }),
       }),
     );
@@ -123,6 +158,36 @@ describe("exec approvals CLI", () => {
     localSnapshot.file = {
       version: 1,
       agents: {
+        "*": {
+          allowlist: [{ pattern: "/usr/bin/uname", lastUsedAt: Date.now() }],
+        },
+      },
+    };
+
+    const saveExecApprovals = vi.mocked(execApprovals.saveExecApprovals);
+    saveExecApprovals.mockClear();
+
+    await runApprovalsCommand(["approvals", "allowlist", "remove", "/usr/bin/uname"]);
+
+    expect(saveExecApprovals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        version: 1,
+        agents: undefined,
+      }),
+    );
+    expect(runtimeErrors).toHaveLength(0);
+  });
+
+  it("removes wildcard-targeted allowlist entry across concrete and wildcard agents", async () => {
+    localSnapshot.file = {
+      version: 1,
+      agents: {
+        main: {
+          allowlist: [{ pattern: "/usr/bin/uname", lastUsedAt: Date.now() }],
+        },
+        ops: {
+          allowlist: [{ pattern: "/usr/bin/uname", lastUsedAt: Date.now() }],
+        },
         "*": {
           allowlist: [{ pattern: "/usr/bin/uname", lastUsedAt: Date.now() }],
         },

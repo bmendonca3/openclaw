@@ -8,6 +8,7 @@ import {
   type ExecApprovalsFile,
 } from "../infra/exec-approvals.js";
 import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
+import { DEFAULT_AGENT_ID } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { renderTable } from "../terminal/table.js";
@@ -292,7 +293,32 @@ async function loadWritableAllowlistAgent(opts: ExecApprovalsCliOpts): Promise<{
   return { nodeId, source, targetLabel, baseHash, file, agentKey, agent, allowlistEntries };
 }
 
-type WritableAllowlistAgentContext = Awaited<ReturnType<typeof loadWritableAllowlistAgent>> & {
+function resolveAllowlistAgentKeys(params: {
+  file: ExecApprovalsFile;
+  requestedAgentKey: string;
+  mode: "add" | "remove";
+}): string[] {
+  if (params.requestedAgentKey !== "*") {
+    return [params.requestedAgentKey];
+  }
+  const agents = params.file.agents ?? {};
+  const concreteAgentKeys = Object.keys(agents).filter((key) => key && key !== "*");
+  if (params.mode === "add") {
+    return concreteAgentKeys.length > 0 ? concreteAgentKeys : [DEFAULT_AGENT_ID];
+  }
+  const keys = [...concreteAgentKeys];
+  if (Object.prototype.hasOwnProperty.call(agents, "*")) {
+    keys.push("*");
+  }
+  return keys;
+}
+
+type WritableAllowlistAgentContext = Omit<
+  Awaited<ReturnType<typeof loadWritableAllowlistAgent>>,
+  "agentKey" | "agent" | "allowlistEntries"
+> & {
+  requestedAgentKey: string;
+  targetAgentKeys: string[];
   trimmedPattern: string;
 };
 type AllowlistMutation = (context: WritableAllowlistAgentContext) => boolean | Promise<boolean>;
@@ -300,12 +326,24 @@ type AllowlistMutation = (context: WritableAllowlistAgentContext) => boolean | P
 async function runAllowlistMutation(
   pattern: string,
   opts: ExecApprovalsCliOpts,
+  mode: "add" | "remove",
   mutate: AllowlistMutation,
 ): Promise<void> {
   try {
     const trimmedPattern = requireTrimmedNonEmpty(pattern, "Pattern required.");
     const context = await loadWritableAllowlistAgent(opts);
-    const shouldSave = await mutate({ ...context, trimmedPattern });
+    const requestedAgentKey = context.agentKey;
+    const targetAgentKeys = resolveAllowlistAgentKeys({
+      file: context.file,
+      requestedAgentKey,
+      mode,
+    });
+    const shouldSave = await mutate({
+      ...context,
+      requestedAgentKey,
+      targetAgentKeys,
+      trimmedPattern,
+    });
     if (!shouldSave) {
       return;
     }
@@ -336,7 +374,7 @@ function registerAllowlistMutationCommand(params: {
     .option("--gateway", "Force gateway approvals", false)
     .option("--agent <id>", 'Agent id (defaults to "*")')
     .action(async (pattern: string, opts: ExecApprovalsCliOpts) => {
-      await runAllowlistMutation(pattern, opts, params.mutate);
+      await runAllowlistMutation(pattern, opts, params.name, params.mutate);
     });
   nodesCallOpts(command);
   return command;
@@ -440,14 +478,27 @@ export function registerExecApprovalsCli(program: Command) {
     allowlist,
     name: "add",
     description: "Add a glob pattern to an allowlist",
-    mutate: ({ trimmedPattern, file, agent, agentKey, allowlistEntries }) => {
-      if (allowlistEntries.some((entry) => normalizeAllowlistEntry(entry) === trimmedPattern)) {
+    mutate: ({ trimmedPattern, file, targetAgentKeys }) => {
+      if (targetAgentKeys.length === 0) {
+        defaultRuntime.log("No matching agents found.");
+        return false;
+      }
+      let changed = false;
+      for (const agentKey of targetAgentKeys) {
+        const agent = ensureAgent(file, agentKey);
+        const allowlistEntries = Array.isArray(agent.allowlist) ? agent.allowlist : [];
+        if (allowlistEntries.some((entry) => normalizeAllowlistEntry(entry) === trimmedPattern)) {
+          continue;
+        }
+        allowlistEntries.push({ pattern: trimmedPattern, lastUsedAt: Date.now() });
+        agent.allowlist = allowlistEntries;
+        file.agents = { ...file.agents, [agentKey]: agent };
+        changed = true;
+      }
+      if (!changed) {
         defaultRuntime.log("Already allowlisted.");
         return false;
       }
-      allowlistEntries.push({ pattern: trimmedPattern, lastUsedAt: Date.now() });
-      agent.allowlist = allowlistEntries;
-      file.agents = { ...file.agents, [agentKey]: agent };
       return true;
     },
   });
@@ -456,26 +507,42 @@ export function registerExecApprovalsCli(program: Command) {
     allowlist,
     name: "remove",
     description: "Remove a glob pattern from an allowlist",
-    mutate: ({ trimmedPattern, file, agent, agentKey, allowlistEntries }) => {
-      const nextEntries = allowlistEntries.filter(
-        (entry) => normalizeAllowlistEntry(entry) !== trimmedPattern,
-      );
-      if (nextEntries.length === allowlistEntries.length) {
+    mutate: ({ trimmedPattern, file, targetAgentKeys }) => {
+      if (targetAgentKeys.length === 0) {
         defaultRuntime.log("Pattern not found.");
         return false;
       }
-      if (nextEntries.length === 0) {
-        delete agent.allowlist;
-      } else {
-        agent.allowlist = nextEntries;
+      let changed = false;
+      const agents = { ...file.agents };
+      for (const agentKey of targetAgentKeys) {
+        const agent = agents[agentKey];
+        if (!agent) {
+          continue;
+        }
+        const allowlistEntries = Array.isArray(agent.allowlist) ? agent.allowlist : [];
+        const nextEntries = allowlistEntries.filter(
+          (entry) => normalizeAllowlistEntry(entry) !== trimmedPattern,
+        );
+        if (nextEntries.length === allowlistEntries.length) {
+          continue;
+        }
+        changed = true;
+        if (nextEntries.length === 0) {
+          delete agent.allowlist;
+        } else {
+          agent.allowlist = nextEntries;
+        }
+        if (isEmptyAgent(agent)) {
+          delete agents[agentKey];
+        } else {
+          agents[agentKey] = agent;
+        }
       }
-      if (isEmptyAgent(agent)) {
-        const agents = { ...file.agents };
-        delete agents[agentKey];
-        file.agents = Object.keys(agents).length > 0 ? agents : undefined;
-      } else {
-        file.agents = { ...file.agents, [agentKey]: agent };
+      if (!changed) {
+        defaultRuntime.log("Pattern not found.");
+        return false;
       }
+      file.agents = Object.keys(agents).length > 0 ? agents : undefined;
       return true;
     },
   });
