@@ -75,4 +75,16 @@ describe("tool-images log context", () => {
 
     expect(infoMock).toHaveBeenCalledTimes(1);
   });
+
+  it("does not cache repeated resize work for non-session labels", async () => {
+    const png = await createLargePng();
+    const blocks = [
+      { type: "image" as const, data: png.toString("base64"), mimeType: "image/png" },
+    ];
+
+    await sanitizeContentBlocksImages(blocks, "nodes:camera_snap");
+    await sanitizeContentBlocksImages(blocks, "nodes:camera_snap");
+
+    expect(infoMock).toHaveBeenCalledTimes(2);
+  });
 });
