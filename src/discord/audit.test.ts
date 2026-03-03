@@ -53,4 +53,33 @@ describe("discord audit", () => {
     expect(audit.channels[0]?.channelId).toBe("111");
     expect(audit.channels[0]?.missing).toContain("SendMessages");
   });
+
+  it("does not count wildcard guild channel keys as unresolved", async () => {
+    const { collectDiscordAuditChannelIds } = await import("./audit.js");
+
+    const cfg = {
+      channels: {
+        discord: {
+          enabled: true,
+          token: "t",
+          groupPolicy: "allowlist",
+          guilds: {
+            "123": {
+              channels: {
+                "*": { allow: true },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as import("../config/config.js").OpenClawConfig;
+
+    const collected = collectDiscordAuditChannelIds({
+      cfg,
+      accountId: "default",
+    });
+
+    expect(collected.channelIds).toEqual([]);
+    expect(collected.unresolvedChannels).toBe(0);
+  });
 });

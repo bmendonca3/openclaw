@@ -22,6 +22,7 @@ export type DiscordChannelPermissionsAudit = {
 };
 
 const REQUIRED_CHANNEL_PERMISSIONS = ["ViewChannel", "SendMessages"] as const;
+const DISCORD_CHANNEL_WILDCARD_KEY = "*";
 
 function shouldAuditChannelConfig(config: DiscordGuildChannelConfig | undefined) {
   if (!config) {
@@ -75,7 +76,9 @@ export function collectDiscordAuditChannelIds(params: {
   });
   const keys = listConfiguredGuildChannelKeys(account.config.guilds);
   const channelIds = keys.filter((key) => /^\d+$/.test(key));
-  const unresolvedChannels = keys.length - channelIds.length;
+  const unresolvedChannels = keys.filter(
+    (key) => key !== DISCORD_CHANNEL_WILDCARD_KEY && !/^\d+$/.test(key),
+  ).length;
   return { channelIds, unresolvedChannels };
 }
 
