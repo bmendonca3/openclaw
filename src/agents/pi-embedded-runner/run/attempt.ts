@@ -363,7 +363,7 @@ function trimWhitespaceFromToolCallNamesInMessage(
     }
     filteredBlocks.push(block);
   }
-  if (droppedToolCall && filteredBlocks.length !== content.length) {
+  if (droppedToolCall) {
     content.length = 0;
     content.push(...filteredBlocks);
   }
