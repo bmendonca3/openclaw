@@ -356,6 +356,7 @@ describe("appendAssistantMessageToSessionTranscript", () => {
             content: [{ type: "text", text: "same reply" }],
             provider: "openclaw",
             model: "delivery-mirror",
+            timestamp: Date.now() - 100,
           },
         }),
       ].join("\n") + "\n",
@@ -371,6 +372,55 @@ describe("appendAssistantMessageToSessionTranscript", () => {
     expect(result).toEqual({ ok: false, reason: "duplicate assistant text" });
     const lines = fs.readFileSync(transcriptPath, "utf-8").trim().split("\n");
     expect(lines.length).toBe(2);
+  });
+
+  it("does not dedupe stale delivery-mirror tail entries with matching text", async () => {
+    const sessionId = "stale-tail-session-id";
+    const sessionKey = "stale-tail-session-key";
+    const store = {
+      [sessionKey]: {
+        sessionId,
+        chatType: "direct",
+        channel: "webchat",
+      },
+    };
+    fs.writeFileSync(fixture.storePath(), JSON.stringify(store), "utf-8");
+
+    const transcriptPath = resolveSessionTranscriptPathInDir(sessionId, fixture.sessionsDir());
+    fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+    fs.writeFileSync(
+      transcriptPath,
+      [
+        JSON.stringify({
+          type: "session",
+          version: 1,
+          id: sessionId,
+          timestamp: new Date().toISOString(),
+          cwd: process.cwd(),
+        }),
+        JSON.stringify({
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "same reply" }],
+            provider: "openclaw",
+            model: "delivery-mirror",
+            timestamp: Date.now() - 10_000,
+          },
+        }),
+      ].join("\n") + "\n",
+      "utf-8",
+    );
+
+    const result = await appendAssistantMessageToSessionTranscript({
+      sessionKey,
+      text: "same reply",
+      storePath: fixture.storePath(),
+    });
+
+    expect(result.ok).toBe(true);
+    const lines = fs.readFileSync(transcriptPath, "utf-8").trim().split("\n");
+    expect(lines.length).toBe(3);
   });
 
   it("does not dedupe against non-delivery-mirror assistant tail entries", async () => {

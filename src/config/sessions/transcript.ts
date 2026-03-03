@@ -7,6 +7,8 @@ import { resolveAndPersistSessionFile } from "./session-file.js";
 import { loadSessionStore } from "./store.js";
 import type { SessionEntry } from "./types.js";
 
+const MIRROR_TAIL_DEDUPE_WINDOW_MS = 500;
+
 function stripQuery(value: string): string {
   const noHash = value.split("#")[0] ?? value;
   return noHash.split("?")[0] ?? noHash;
@@ -91,6 +93,7 @@ function extractAssistantText(message: unknown): string | null {
 function isDuplicateAssistantTail(params: {
   sessionManager: SessionManager;
   mirrorText: string;
+  nowMs: number;
 }): boolean {
   const entries = params.sessionManager.getEntries();
   for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -106,7 +109,18 @@ function isDuplicateAssistantTail(params: {
       return false;
     }
     const lastAssistantText = extractAssistantText(message);
-    return lastAssistantText === params.mirrorText;
+    if (lastAssistantText !== params.mirrorText) {
+      return false;
+    }
+    const lastTimestamp =
+      typeof message.timestamp === "number" && Number.isFinite(message.timestamp)
+        ? message.timestamp
+        : null;
+    if (lastTimestamp == null) {
+      return false;
+    }
+    const ageMs = params.nowMs - lastTimestamp;
+    return ageMs >= 0 && ageMs <= MIRROR_TAIL_DEDUPE_WINDOW_MS;
   }
   return false;
 }
@@ -181,8 +195,9 @@ export async function appendAssistantMessageToSessionTranscript(params: {
 
   await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
 
+  const nowMs = Date.now();
   const sessionManager = SessionManager.open(sessionFile);
-  if (isDuplicateAssistantTail({ sessionManager, mirrorText })) {
+  if (isDuplicateAssistantTail({ sessionManager, mirrorText, nowMs })) {
     return { ok: false, reason: "duplicate assistant text" };
   }
   sessionManager.appendMessage({
@@ -206,7 +221,7 @@ export async function appendAssistantMessageToSessionTranscript(params: {
       },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: nowMs,
   });
 
   emitSessionTranscriptUpdate(sessionFile);
