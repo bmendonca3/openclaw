@@ -231,9 +231,7 @@ export function wrapOllamaCompatNumCtx(baseFn: StreamFn | undefined, numCtx: num
 function normalizeToolCallNameForDispatch(rawName: string, allowedToolNames?: Set<string>): string {
   const trimmed = rawName.trim();
   if (!trimmed) {
-    // Keep whitespace-only placeholders unchanged so they do not collapse to
-    // empty names (which can later surface as toolName="" loops).
-    return rawName;
+    return "";
   }
   if (!allowedToolNames || allowedToolNames.size === 0) {
     return trimmed;
@@ -343,18 +341,31 @@ function trimWhitespaceFromToolCallNamesInMessage(
   if (!Array.isArray(content)) {
     return;
   }
+  const filteredBlocks: unknown[] = [];
+  let droppedToolCall = false;
   for (const block of content) {
     if (!block || typeof block !== "object") {
+      filteredBlocks.push(block);
       continue;
     }
     const typedBlock = block as { type?: unknown; name?: unknown };
     if (typedBlock.type !== "toolCall" || typeof typedBlock.name !== "string") {
+      filteredBlocks.push(block);
       continue;
     }
     const normalized = normalizeToolCallNameForDispatch(typedBlock.name, allowedToolNames);
+    if (!normalized) {
+      droppedToolCall = true;
+      continue;
+    }
     if (normalized !== typedBlock.name) {
       typedBlock.name = normalized;
     }
+    filteredBlocks.push(block);
+  }
+  if (droppedToolCall && filteredBlocks.length !== content.length) {
+    content.length = 0;
+    content.push(...filteredBlocks);
   }
   normalizeToolCallIdsInMessage(message);
 }

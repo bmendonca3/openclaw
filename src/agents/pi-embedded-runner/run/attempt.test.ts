@@ -224,7 +224,7 @@ describe("wrapStreamFnTrimToolCallNames", () => {
     expect(result).toBe(finalMessage);
   });
 
-  it("does not collapse whitespace-only tool names to empty strings", async () => {
+  it("drops whitespace-only tool calls from streamed and final messages", async () => {
     const partialToolCall = { type: "toolCall", name: "   " };
     const finalToolCall = { type: "toolCall", name: "\t  " };
     const event = {
@@ -238,10 +238,10 @@ describe("wrapStreamFnTrimToolCallNames", () => {
     for await (const _item of stream) {
       // drain
     }
-    await stream.result();
+    const result = await stream.result();
 
-    expect(partialToolCall.name).toBe("   ");
-    expect(finalToolCall.name).toBe("\t  ");
+    expect((event.partial as { content: unknown[] }).content).toEqual([]);
+    expect((result as { content: unknown[] }).content).toEqual([]);
     expect(baseFn).toHaveBeenCalledTimes(1);
   });
 
