@@ -1,10 +1,10 @@
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
-  resolveAllowlistProviderRuntimeGroupPolicy,
+  resolveOpenProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
 } from "../config/runtime-group-policy.js";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
+import { normalizeAccountId } from "../routing/session-key.js";
 import { listTelegramAccountIds, resolveTelegramAccount } from "../telegram/accounts.js";
 import { note } from "../terminal/note.js";
 
@@ -46,7 +46,7 @@ function collectTelegramGroupAllowlistUpgradeWarnings(cfg: OpenClawConfig): stri
       continue;
     }
 
-    const { groupPolicy } = resolveAllowlistProviderRuntimeGroupPolicy({
+    const { groupPolicy } = resolveOpenProviderRuntimeGroupPolicy({
       providerConfigPresent: cfg.channels?.telegram !== undefined,
       groupPolicy: account.config.groupPolicy,
       defaultGroupPolicy,
@@ -71,9 +71,7 @@ function collectTelegramGroupAllowlistUpgradeWarnings(cfg: OpenClawConfig): stri
       continue;
     }
 
-    const useAccountPath =
-      normalizeAccountId(account.accountId) !== DEFAULT_ACCOUNT_ID &&
-      hasAccountConfigEntry(cfg, account.accountId);
+    const useAccountPath = hasAccountConfigEntry(cfg, account.accountId);
     const basePath = useAccountPath
       ? `channels.telegram.accounts.${account.accountId}`
       : "channels.telegram";

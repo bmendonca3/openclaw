@@ -83,6 +83,38 @@ describe("doctor breaking-change upgrade checks", () => {
     expect(warnings.join("\n")).toContain("channels.telegram.accounts.alerts.groupAllowFrom");
   });
 
+  it("uses account-scoped config path for explicit default telegram account", () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          enabled: true,
+          accounts: {
+            default: {
+              botToken: "token",
+              groupPolicy: "allowlist",
+            },
+          },
+        },
+      },
+    } as OpenClawConfig;
+
+    const warnings = collectBreakingChangeUpgradeWarnings(cfg);
+    expect(warnings.join("\n")).toContain("channels.telegram.accounts.default.groupAllowFrom");
+  });
+
+  it("does not warn for configured telegram accounts without explicit groupPolicy", () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          enabled: true,
+          botToken: "token",
+        },
+      },
+    } as OpenClawConfig;
+
+    expect(collectBreakingChangeUpgradeWarnings(cfg)).toEqual([]);
+  });
+
   it("does not warn when telegram sender allowlist is configured", () => {
     const cfg = {
       channels: {
