@@ -63,4 +63,16 @@ describe("tool-images log context", () => {
     expect(typeof message).toBe("string");
     expect(String(message)).toContain("sample-diagram.png");
   });
+
+  it("does not re-log identical resize work for repeated session history payloads", async () => {
+    const png = await createLargePng();
+    const blocks = [
+      { type: "image" as const, data: png.toString("base64"), mimeType: "image/png" },
+    ];
+
+    await sanitizeContentBlocksImages(blocks, "session:history");
+    await sanitizeContentBlocksImages(blocks, "session:history");
+
+    expect(infoMock).toHaveBeenCalledTimes(1);
+  });
 });

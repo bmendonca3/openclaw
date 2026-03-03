@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { ImageContent } from "@mariozechner/pi-ai";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -26,7 +27,11 @@ type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
 // and recompress base64 image blocks when they exceed these limits.
 const MAX_IMAGE_DIMENSION_PX = DEFAULT_IMAGE_MAX_DIMENSION_PX;
 const MAX_IMAGE_BYTES = DEFAULT_IMAGE_MAX_BYTES;
+const SANITIZED_IMAGE_CACHE_MAX_ENTRIES = 256;
 const log = createSubsystemLogger("agents/tool-images");
+
+type SanitizedImageResult = Awaited<ReturnType<typeof resizeImageBase64IfNeeded>>;
+const sanitizedImageCache = new Map<string, Promise<SanitizedImageResult>>();
 
 function isImageBlock(block: unknown): block is ImageContentBlock {
   if (!block || typeof block !== "object") {
@@ -266,6 +271,38 @@ async function resizeImageBase64IfNeeded(params: {
   throw new Error(`Image could not be reduced below ${maxMb}MB (got ${gotMb}MB)`);
 }
 
+function buildSanitizedImageCacheKey(params: {
+  canonicalData: string;
+  label: string;
+  mimeType: string;
+  maxDimensionPx: number;
+  maxBytes: number;
+}): string {
+  const digest = createHash("sha1").update(params.canonicalData, "utf8").digest("hex");
+  return `${params.label}|${params.mimeType}|${params.maxDimensionPx}|${params.maxBytes}|${digest}`;
+}
+
+function rememberSanitizedImageCacheValue(
+  key: string,
+  value: Promise<SanitizedImageResult>,
+): Promise<SanitizedImageResult> {
+  sanitizedImageCache.set(key, value);
+  while (sanitizedImageCache.size > SANITIZED_IMAGE_CACHE_MAX_ENTRIES) {
+    const oldest = sanitizedImageCache.keys().next().value;
+    if (!oldest) {
+      break;
+    }
+    sanitizedImageCache.delete(oldest);
+  }
+  value.catch(() => {
+    // Don't keep failed conversions in cache; allow a future retry.
+    if (sanitizedImageCache.get(key) === value) {
+      sanitizedImageCache.delete(key);
+    }
+  });
+  return value;
+}
+
 export async function sanitizeContentBlocksImages(
   blocks: ToolContentBlock[],
   label: string,
@@ -310,14 +347,30 @@ export async function sanitizeContentBlocksImages(
       const inferredMimeType = inferMimeTypeFromBase64(canonicalData);
       const mimeType = inferredMimeType ?? block.mimeType;
       const fileName = inferImageFileName({ block, label, mediaPathHint });
-      const resized = await resizeImageBase64IfNeeded({
-        base64: canonicalData,
+      const cacheKey = buildSanitizedImageCacheKey({
+        canonicalData,
+        label,
         mimeType,
         maxDimensionPx,
         maxBytes,
-        label,
-        fileName,
       });
+      const resized = await (() => {
+        const cached = sanitizedImageCache.get(cacheKey);
+        if (cached) {
+          return cached;
+        }
+        return rememberSanitizedImageCacheValue(
+          cacheKey,
+          resizeImageBase64IfNeeded({
+            base64: canonicalData,
+            mimeType,
+            maxDimensionPx,
+            maxBytes,
+            label,
+            fileName,
+          }),
+        );
+      })();
       out.push({
         ...block,
         data: resized.base64,
