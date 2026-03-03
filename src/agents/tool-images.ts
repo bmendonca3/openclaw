@@ -27,7 +27,7 @@ type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
 // and recompress base64 image blocks when they exceed these limits.
 const MAX_IMAGE_DIMENSION_PX = DEFAULT_IMAGE_MAX_DIMENSION_PX;
 const MAX_IMAGE_BYTES = DEFAULT_IMAGE_MAX_BYTES;
-const SANITIZED_IMAGE_CACHE_MAX_ENTRIES = 16;
+const SANITIZED_IMAGE_CACHE_MAX_ENTRIES = 256;
 const log = createSubsystemLogger("agents/tool-images");
 
 type SanitizedImageResult = Awaited<ReturnType<typeof resizeImageBase64IfNeeded>>;
