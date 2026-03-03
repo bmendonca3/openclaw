@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleChatEvent, loadChatHistory, type ChatEventPayload, type ChatState } from "./chat.ts";
+import {
+  handleChatEvent,
+  loadChatHistory,
+  sendChatMessage,
+  type ChatEventPayload,
+  type ChatState,
+} from "./chat.ts";
 
 function createState(overrides: Partial<ChatState> = {}): ChatState {
   return {
@@ -533,6 +539,36 @@ describe("loadChatHistory", () => {
 
     // text takes precedence — "real reply" is NOT silent, so message is kept.
     expect(state.chatMessages).toHaveLength(1);
+  });
+});
+
+describe("sendChatMessage", () => {
+  it("keeps pasted image attachments when data URL has no mime prefix", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const state = createState({
+      connected: true,
+      client: { request } as unknown as ChatState["client"],
+    });
+
+    await sendChatMessage(state, "", [
+      {
+        id: "att-1",
+        mimeType: "image/png",
+        dataUrl: "data:;base64,aGVsbG8=",
+      },
+    ]);
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const payload = request.mock.calls[0]?.[1] as {
+      attachments?: Array<{ mimeType: string; content: string; type: string }>;
+    };
+    expect(payload.attachments).toEqual([
+      {
+        type: "image",
+        mimeType: "image/png",
+        content: "aGVsbG8=",
+      },
+    ]);
   });
 });
 
