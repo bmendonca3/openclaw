@@ -318,6 +318,7 @@ export async function runAgentTurnWithFallback(params: {
             bootstrapContextRunKind: params.opts?.isHeartbeat ? "heartbeat" : "default",
             images: params.opts?.images,
             abortSignal: params.opts?.abortSignal,
+            blockStreamingEnabled: params.blockStreamingEnabled,
             blockReplyBreak: params.resolvedBlockStreamingBreak,
             blockReplyChunking: params.blockReplyChunking,
             onPartialReply: async (payload) => {
