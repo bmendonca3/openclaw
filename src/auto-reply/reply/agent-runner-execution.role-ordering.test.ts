@@ -13,6 +13,9 @@ describe("isRoleOrderingConflictError", () => {
     expect(
       isRoleOrderingConflictError("ValueError: Unexpected role 'user' after role 'tool'"),
     ).toBe(true);
+    expect(
+      isRoleOrderingConflictError('ValueError: Unexpected role "user" after role "tool"'),
+    ).toBe(true);
   });
 
   it("does not match unrelated errors", () => {
