@@ -324,6 +324,54 @@ describe("appendAssistantMessageToSessionTranscript", () => {
       expect(messageLine.message.content[0].text).toBe("Hello from delivery mirror!");
     }
   });
+
+  it("skips delivery-mirror append when the latest assistant text already matches", async () => {
+    const sessionId = "dup-session-id";
+    const sessionKey = "dup-session-key";
+    const store = {
+      [sessionKey]: {
+        sessionId,
+        chatType: "direct",
+        channel: "webchat",
+      },
+    };
+    fs.writeFileSync(fixture.storePath(), JSON.stringify(store), "utf-8");
+
+    const transcriptPath = resolveSessionTranscriptPathInDir(sessionId, fixture.sessionsDir());
+    fs.mkdirSync(path.dirname(transcriptPath), { recursive: true });
+    fs.writeFileSync(
+      transcriptPath,
+      [
+        JSON.stringify({
+          type: "session",
+          version: 1,
+          id: sessionId,
+          timestamp: new Date().toISOString(),
+          cwd: process.cwd(),
+        }),
+        JSON.stringify({
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "same reply" }],
+            provider: "openai-codex",
+            model: "gpt-5.3-codex",
+          },
+        }),
+      ].join("\n") + "\n",
+      "utf-8",
+    );
+
+    const result = await appendAssistantMessageToSessionTranscript({
+      sessionKey,
+      text: "same reply",
+      storePath: fixture.storePath(),
+    });
+
+    expect(result).toEqual({ ok: false, reason: "duplicate assistant text" });
+    const lines = fs.readFileSync(transcriptPath, "utf-8").trim().split("\n");
+    expect(lines.length).toBe(2);
+  });
 });
 
 describe("resolveAndPersistSessionFile", () => {
