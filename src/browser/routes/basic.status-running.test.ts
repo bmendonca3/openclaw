@@ -12,6 +12,16 @@ describe("resolveBrowserStatusRunning", () => {
     ).toBe(true);
   });
 
+  it("reports extension profiles as not running when relay HTTP is unreachable", () => {
+    expect(
+      resolveBrowserStatusRunning({
+        driver: "extension",
+        cdpHttp: false,
+        cdpReady: false,
+      }),
+    ).toBe(false);
+  });
+
   it("uses CDP websocket readiness for openclaw profiles", () => {
     expect(
       resolveBrowserStatusRunning({
@@ -20,5 +30,15 @@ describe("resolveBrowserStatusRunning", () => {
         cdpReady: false,
       }),
     ).toBe(false);
+  });
+
+  it("reports openclaw profiles as running when CDP websocket is ready", () => {
+    expect(
+      resolveBrowserStatusRunning({
+        driver: "openclaw",
+        cdpHttp: false,
+        cdpReady: true,
+      }),
+    ).toBe(true);
   });
 });
