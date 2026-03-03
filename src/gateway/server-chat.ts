@@ -96,9 +96,6 @@ function isLikelyImageUrl(url: string): boolean {
   if (/^data:image\//i.test(url)) {
     return true;
   }
-  if (/\.(png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i.test(url)) {
-    return true;
-  }
 
   let parsed: URL;
   try {
@@ -109,6 +106,10 @@ function isLikelyImageUrl(url: string): boolean {
 
   if (!/^https?:$/i.test(parsed.protocol)) {
     return false;
+  }
+
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(parsed.pathname)) {
+    return true;
   }
 
   const leaf = parsed.pathname.split("/").pop() ?? "";

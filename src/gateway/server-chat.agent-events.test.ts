@@ -658,6 +658,8 @@ describe("agent event handler", () => {
           "https://example.com/cat.png",
           "https://example.com/media/2c6d7fef",
           "https://example.com/file.pdf",
+          "/tmp/render.png",
+          "file:///tmp/render.png",
         ],
       },
     });
@@ -687,6 +689,14 @@ describe("agent event handler", () => {
     expect(content).not.toContainEqual({
       type: "image_url",
       image_url: { url: "https://example.com/file.pdf" },
+    });
+    expect(content).not.toContainEqual({
+      type: "image_url",
+      image_url: { url: "/tmp/render.png" },
+    });
+    expect(content).not.toContainEqual({
+      type: "image_url",
+      image_url: { url: "file:///tmp/render.png" },
     });
   });
 });
