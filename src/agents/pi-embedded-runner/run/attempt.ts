@@ -348,7 +348,7 @@ function trimWhitespaceFromToolCallNamesInMessage(
       continue;
     }
     const typedBlock = block as { type?: unknown; name?: unknown };
-    if (typedBlock.type !== "toolCall" || typeof typedBlock.name !== "string") {
+    if (!isToolCallBlockType(typedBlock.type) || typeof typedBlock.name !== "string") {
       continue;
     }
     const normalized = normalizeToolCallNameForDispatch(typedBlock.name, allowedToolNames);

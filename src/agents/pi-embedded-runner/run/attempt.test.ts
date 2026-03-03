@@ -190,6 +190,37 @@ describe("wrapStreamFnTrimToolCallNames", () => {
     expect(baseFn).toHaveBeenCalledTimes(1);
   });
 
+  it("trims whitespace for toolUse/functionCall blocks in streamed and final messages", async () => {
+    const partialToolUse = { type: "toolUse", name: " read " };
+    const messageFunctionCall = { type: "functionCall", name: " exec " };
+    const finalToolUse = { type: "toolUse", name: " write " };
+    const event = {
+      type: "toolcall_delta",
+      partial: { role: "assistant", content: [partialToolUse] },
+      message: { role: "assistant", content: [messageFunctionCall] },
+    };
+    const finalMessage = { role: "assistant", content: [finalToolUse] };
+    const baseFn = vi.fn(() =>
+      createFakeStream({
+        events: [event],
+        resultMessage: finalMessage,
+      }),
+    );
+
+    const stream = await invokeWrappedStream(baseFn);
+
+    for await (const _item of stream) {
+      // drain
+    }
+    const result = await stream.result();
+
+    expect(partialToolUse.name).toBe("read");
+    expect(messageFunctionCall.name).toBe("exec");
+    expect(finalToolUse.name).toBe("write");
+    expect(result).toBe(finalMessage);
+    expect(baseFn).toHaveBeenCalledTimes(1);
+  });
+
   it("supports async stream functions that return a promise", async () => {
     const finalToolCall = { type: "toolCall", name: " browser " };
     const finalMessage = { role: "assistant", content: [finalToolCall] };
