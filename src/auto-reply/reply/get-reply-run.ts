@@ -524,6 +524,7 @@ export async function runPreparedReply(
     resolvedQueue,
     shouldSteer,
     shouldFollowup,
+    hasQueuedSystemPrompt: Boolean(queuedSystemPrompt),
     isActive,
     isStreaming,
     opts,

@@ -66,6 +66,7 @@ export async function runReplyAgent(params: {
   resolvedQueue: QueueSettings;
   shouldSteer: boolean;
   shouldFollowup: boolean;
+  hasQueuedSystemPrompt?: boolean;
   isActive: boolean;
   isStreaming: boolean;
   opts?: GetReplyOptions;
@@ -97,6 +98,7 @@ export async function runReplyAgent(params: {
     resolvedQueue,
     shouldSteer,
     shouldFollowup,
+    hasQueuedSystemPrompt,
     isActive,
     isStreaming,
     opts,
@@ -200,6 +202,7 @@ export async function runReplyAgent(params: {
   const activeRunQueueAction = resolveActiveRunQueueAction({
     isActive,
     isHeartbeat,
+    hasQueuedSystemPrompt,
     shouldFollowup,
     queueMode: resolvedQueue.mode,
   });

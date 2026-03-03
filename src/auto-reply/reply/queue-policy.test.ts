@@ -18,10 +18,23 @@ describe("resolveActiveRunQueueAction", () => {
       resolveActiveRunQueueAction({
         isActive: true,
         isHeartbeat: true,
+        hasQueuedSystemPrompt: false,
         shouldFollowup: true,
         queueMode: "collect",
       }),
     ).toBe("drop");
+  });
+
+  it("enqueues heartbeat runs with queued system events while active", () => {
+    expect(
+      resolveActiveRunQueueAction({
+        isActive: true,
+        isHeartbeat: true,
+        hasQueuedSystemPrompt: true,
+        shouldFollowup: true,
+        queueMode: "collect",
+      }),
+    ).toBe("enqueue-followup");
   });
 
   it("enqueues followups for non-heartbeat active runs", () => {
