@@ -246,6 +246,7 @@ describe("mattermostPlugin", () => {
       if (!sendText) {
         return;
       }
+
       const cfg = {
         channels: {
           mattermost: {
@@ -258,16 +259,42 @@ describe("mattermostPlugin", () => {
       await sendText({
         cfg,
         to: "channel:CHAN1",
-        text: "hello",
+        text: "threaded text",
         accountId: "default",
+        threadId: "post-thread-1",
       } as any);
 
       expect(sendMessageMattermostMock).toHaveBeenCalledWith(
         "channel:CHAN1",
-        "hello",
+        "threaded text",
         expect.objectContaining({
           cfg,
           accountId: "default",
+          replyToId: "post-thread-1",
+        }),
+      );
+    });
+
+    it("uses threadId as replyToId fallback on sendMedia", async () => {
+      const sendMedia = mattermostPlugin.outbound?.sendMedia;
+      if (!sendMedia) {
+        return;
+      }
+
+      await sendMedia({
+        to: "channel:CHAN1",
+        text: "threaded media",
+        mediaUrl: "https://example.com/image.png",
+        accountId: "default",
+        threadId: "post-thread-2",
+      } as any);
+
+      expect(sendMessageMattermostMock).toHaveBeenCalledWith(
+        "channel:CHAN1",
+        "threaded media",
+        expect.objectContaining({
+          mediaUrl: "https://example.com/image.png",
+          replyToId: "post-thread-2",
         }),
       );
     });
