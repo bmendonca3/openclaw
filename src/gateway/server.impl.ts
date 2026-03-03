@@ -439,6 +439,7 @@ export async function startGatewayServer(
   const controlUiSeedSnapshot = await readConfigFileSnapshot();
   await maybeSeedControlUiAllowedOriginsAtStartup({
     config: controlUiSeedSnapshot.config,
+    configPath: controlUiSeedSnapshot.path,
     writeConfig: async (nextCfg) =>
       await writeConfigFile(nextCfg, { expectedConfigHash: controlUiSeedSnapshot.hash }),
     log,

@@ -1425,6 +1425,7 @@ export async function writeConfigFile(
     options.expectedConfigPath === undefined || options.expectedConfigPath === io.configPath;
   await io.writeConfigFile(nextCfg, {
     envSnapshotForRestore: sameConfigPath ? options.envSnapshotForRestore : undefined,
+    expectedConfigHash: options.expectedConfigHash,
     unsetPaths: options.unsetPaths,
   });
 }

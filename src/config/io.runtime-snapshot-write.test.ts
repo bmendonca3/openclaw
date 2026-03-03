@@ -3,9 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { withTempHome } from "./home-env.test-harness.js";
 import {
+  ConfigWriteConflictError,
   clearConfigCache,
   clearRuntimeConfigSnapshot,
   loadConfig,
+  readConfigFileSnapshot,
   setRuntimeConfigSnapshot,
   writeConfigFile,
 } from "./io.js";
@@ -59,6 +61,40 @@ describe("runtime config snapshot writes", () => {
         clearRuntimeConfigSnapshot();
         clearConfigCache();
       }
+    });
+  });
+
+  it("forwards expectedConfigHash through the public writeConfigFile wrapper", async () => {
+    await withTempHome("openclaw-config-runtime-write-", async (home) => {
+      const configPath = path.join(home, ".openclaw", "openclaw.json");
+      const initialConfig: OpenClawConfig = {
+        gateway: {
+          mode: "local",
+        },
+      };
+
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
+      await fs.writeFile(configPath, `${JSON.stringify(initialConfig, null, 2)}\n`, "utf8");
+
+      const snapshot = await readConfigFileSnapshot();
+      const nextConfig: OpenClawConfig = {
+        gateway: {
+          mode: "local",
+          auth: {
+            mode: "token",
+          },
+        },
+      };
+
+      await fs.writeFile(
+        configPath,
+        `${JSON.stringify({ gateway: { mode: "remote" } }, null, 2)}\n`,
+        "utf8",
+      );
+
+      await expect(
+        writeConfigFile(nextConfig, { expectedConfigHash: snapshot.hash }),
+      ).rejects.toBeInstanceOf(ConfigWriteConflictError);
     });
   });
 });
