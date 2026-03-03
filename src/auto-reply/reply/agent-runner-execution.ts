@@ -69,6 +69,12 @@ export type AgentRunLoopResult =
     }
   | { kind: "final"; payload: ReplyPayload };
 
+export function isRoleOrderingConflictError(message: string): boolean {
+  return /incorrect role information|roles must alternate|unexpected role ['"]\w+['"] after role ['"]\w+['"]/i.test(
+    message,
+  );
+}
+
 export async function runAgentTurnWithFallback(params: {
   commandBody: string;
   followupRun: FollowupRun;
@@ -478,7 +484,7 @@ export async function runAgentTurnWithFallback(params: {
       const isContextOverflow = isLikelyContextOverflowError(message);
       const isCompactionFailure = isCompactionFailureError(message);
       const isSessionCorruption = /function call turn comes immediately after/i.test(message);
-      const isRoleOrderingError = /incorrect role information|roles must alternate/i.test(message);
+      const isRoleOrderingError = isRoleOrderingConflictError(message);
       const isTransientHttp = isTransientHttpError(message);
 
       if (
