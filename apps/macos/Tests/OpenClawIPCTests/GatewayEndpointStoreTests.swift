@@ -70,6 +70,49 @@ import Testing
         #expect(token == "remote-token")
     }
 
+    @Test func resolveGatewayTokenPrefersLaunchdOverRemoteTokenInLocalMode() {
+        let snapshot = LaunchAgentPlistSnapshot(
+            programArguments: [],
+            environment: ["OPENCLAW_GATEWAY_TOKEN": "launchd-token"],
+            stdoutPath: nil,
+            stderrPath: nil,
+            port: nil,
+            bind: nil,
+            token: "launchd-token",
+            password: nil)
+
+        let token = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "remote": [
+                        "token": "remote-token"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: snapshot)
+        #expect(token == "launchd-token")
+    }
+
+    @Test func resolveGatewayTokenTreatsBlankAuthTokenAsMissingForRemoteFallback() {
+        let token = GatewayEndpointStore._testResolveGatewayToken(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "token": "   "
+                    ],
+                    "remote": [
+                        "token": "remote-token"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(token == "remote-token")
+    }
+
     @Test func resolveGatewayPasswordFallsBackToLaunchd() {
         let snapshot = LaunchAgentPlistSnapshot(
             programArguments: [],
@@ -94,6 +137,49 @@ import Testing
             isRemote: false,
             root: [
                 "gateway": [
+                    "remote": [
+                        "password": "remote-pass"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: nil)
+        #expect(password == "remote-pass")
+    }
+
+    @Test func resolveGatewayPasswordPrefersLaunchdOverRemotePasswordInLocalMode() {
+        let snapshot = LaunchAgentPlistSnapshot(
+            programArguments: [],
+            environment: ["OPENCLAW_GATEWAY_PASSWORD": "launchd-pass"],
+            stdoutPath: nil,
+            stderrPath: nil,
+            port: nil,
+            bind: nil,
+            token: nil,
+            password: "launchd-pass")
+
+        let password = GatewayEndpointStore._testResolveGatewayPassword(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "remote": [
+                        "password": "remote-pass"
+                    ]
+                ]
+            ],
+            env: [:],
+            launchdSnapshot: snapshot)
+        #expect(password == "launchd-pass")
+    }
+
+    @Test func resolveGatewayPasswordTreatsBlankAuthPasswordAsMissingForRemoteFallback() {
+        let password = GatewayEndpointStore._testResolveGatewayPassword(
+            isRemote: false,
+            root: [
+                "gateway": [
+                    "auth": [
+                        "password": "   "
+                    ],
                     "remote": [
                         "password": "remote-pass"
                     ]

@@ -110,31 +110,38 @@ actor GatewayEndpointStore {
         {
             return password
         }
+        if let remotePassword = self.resolveRemoteConfigPassword(root: root), !remotePassword.isEmpty {
+            return remotePassword
+        }
         return nil
     }
 
     private static func resolveConfigPassword(isRemote: Bool, root: [String: Any]) -> String? {
         if isRemote {
-            if let gateway = root["gateway"] as? [String: Any],
-               let remote = gateway["remote"] as? [String: Any],
-               let password = remote["password"] as? String
-            {
-                return password.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return nil
+            return self.resolveRemoteConfigPassword(root: root)
         }
 
         if let gateway = root["gateway"] as? [String: Any],
            let auth = gateway["auth"] as? [String: Any],
            let password = auth["password"] as? String
         {
-            return password.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
         }
+        return nil
+    }
+
+    private static func resolveRemoteConfigPassword(root: [String: Any]) -> String? {
         if let gateway = root["gateway"] as? [String: Any],
            let remote = gateway["remote"] as? [String: Any],
            let password = remote["password"] as? String
         {
-            return password.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
         }
         return nil
     }
@@ -175,32 +182,39 @@ actor GatewayEndpointStore {
         {
             return token
         }
+        if let remoteToken = self.resolveRemoteConfigToken(root: root), !remoteToken.isEmpty {
+            return remoteToken
+        }
 
         return nil
     }
 
     private static func resolveConfigToken(isRemote: Bool, root: [String: Any]) -> String? {
         if isRemote {
-            if let gateway = root["gateway"] as? [String: Any],
-               let remote = gateway["remote"] as? [String: Any],
-               let token = remote["token"] as? String
-            {
-                return token.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return nil
+            return self.resolveRemoteConfigToken(root: root)
         }
 
         if let gateway = root["gateway"] as? [String: Any],
            let auth = gateway["auth"] as? [String: Any],
            let token = auth["token"] as? String
         {
-            return token.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
         }
+        return nil
+    }
+
+    private static func resolveRemoteConfigToken(root: [String: Any]) -> String? {
         if let gateway = root["gateway"] as? [String: Any],
            let remote = gateway["remote"] as? [String: Any],
            let token = remote["token"] as? String
         {
-            return token.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
         }
         return nil
     }
