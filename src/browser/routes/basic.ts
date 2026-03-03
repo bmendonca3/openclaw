@@ -5,6 +5,16 @@ import { resolveProfileContext } from "./agent.shared.js";
 import type { BrowserRequest, BrowserResponse, BrowserRouteRegistrar } from "./types.js";
 import { getProfileContext, jsonError, toStringOrEmpty } from "./utils.js";
 
+export function resolveBrowserStatusRunning(params: {
+  driver: "openclaw" | "extension";
+  cdpHttp: boolean;
+  cdpReady: boolean;
+}): boolean {
+  // Extension profiles are healthy when relay HTTP is reachable.
+  // Tab-level CDP readiness remains exposed via cdpReady.
+  return params.driver === "extension" ? params.cdpHttp : params.cdpReady;
+}
+
 async function withBasicProfileRoute(params: {
   req: BrowserRequest;
   res: BrowserResponse;
@@ -71,7 +81,11 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
     res.json({
       enabled: current.resolved.enabled,
       profile: profileCtx.profile.name,
-      running: cdpReady,
+      running: resolveBrowserStatusRunning({
+        driver: profileCtx.profile.driver,
+        cdpHttp,
+        cdpReady,
+      }),
       cdpReady,
       cdpHttp,
       pid: profileState?.running?.pid ?? null,
