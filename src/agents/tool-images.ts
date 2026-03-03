@@ -352,15 +352,9 @@ export async function sanitizeContentBlocksImages(
       const inferredMimeType = inferMimeTypeFromBase64(canonicalData);
       const mimeType = inferredMimeType ?? block.mimeType;
       const fileName = inferImageFileName({ block, label, mediaPathHint });
-      const cacheKey = buildSanitizedImageCacheKey({
-        canonicalData,
-        label,
-        mimeType,
-        maxDimensionPx,
-        maxBytes,
-      });
+      const cacheEnabled = shouldCacheSanitizedImage(label);
       const resized = await (() => {
-        if (!shouldCacheSanitizedImage(label)) {
+        if (!cacheEnabled) {
           return resizeImageBase64IfNeeded({
             base64: canonicalData,
             mimeType,
@@ -370,6 +364,13 @@ export async function sanitizeContentBlocksImages(
             fileName,
           });
         }
+        const cacheKey = buildSanitizedImageCacheKey({
+          canonicalData,
+          label,
+          mimeType,
+          maxDimensionPx,
+          maxBytes,
+        });
         const cached = sanitizedImageCache.get(cacheKey);
         if (cached) {
           return cached;
