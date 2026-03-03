@@ -238,7 +238,9 @@ async function prepareNodesRunContext(params: {
     });
 
   const advertisedCommands = Array.isArray(nodeInfo?.commands) ? nodeInfo.commands : null;
-  if (advertisedCommands && !advertisedCommands.includes("system.run.prepare")) {
+  const advertisedSupportsPrepare = advertisedCommands?.includes("system.run.prepare") ?? false;
+  const advertisedSupportsRun = advertisedCommands?.includes("system.run") ?? false;
+  if (advertisedCommands && !advertisedSupportsPrepare && advertisedSupportsRun) {
     return {
       prepared: fallbackPrepared(),
       nodeEnv,
@@ -268,6 +270,9 @@ async function prepareNodesRunContext(params: {
     };
   } catch (error) {
     if (!isUnsupportedNodeCommandError(error, "system.run.prepare")) {
+      throw error;
+    }
+    if (advertisedCommands && !advertisedSupportsRun) {
       throw error;
     }
     return {

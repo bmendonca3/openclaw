@@ -219,6 +219,33 @@ describe("nodes run prepare fallback (#29171)", () => {
     expect(invokeCommands).toEqual(["system.run.prepare", "system.run"]);
   });
 
+  it("does not fallback when node advertises neither system.run.prepare nor system.run", async () => {
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      commands: ["system.describe"],
+      connected: true,
+      permissions: { screenRecording: true },
+    };
+
+    const program = new Command();
+    program.exitOverride();
+    registerNodesCli(program);
+
+    await program.parseAsync(["nodes", "run", "--node", "mac-1", "echo", "hi"], {
+      from: "user",
+    });
+
+    const invokeCommands = callGateway.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.method === "node.invoke")
+      .map((entry) => entry.params?.command);
+
+    expect(invokeCommands).toEqual(["system.run.prepare"]);
+  });
+
   it("falls back when the node host returns a generic unsupported-command error", async () => {
     prepareErrorMessage = "command not supported";
     nodeListResponse.nodes[0] = {
