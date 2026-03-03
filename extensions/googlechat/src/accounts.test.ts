@@ -5,17 +5,35 @@ import { listGoogleChatAccountIds, resolveGoogleChatAccount } from "./accounts.j
 
 describe("googlechat accounts null-safety", () => {
   it("does not throw when channels.googlechat is null", () => {
+    const originalServiceAccount = process.env["GOOGLE_CHAT_SERVICE_ACCOUNT"];
+    const originalServiceAccountFile = process.env["GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"];
+    delete process.env["GOOGLE_CHAT_SERVICE_ACCOUNT"];
+    delete process.env["GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"];
+
     const cfg = {
       channels: {
         googlechat: null,
       },
     } as unknown as OpenClawConfig;
 
-    expect(listGoogleChatAccountIds(cfg)).toEqual([DEFAULT_ACCOUNT_ID]);
-    expect(() => resolveGoogleChatAccount({ cfg })).not.toThrow();
+    try {
+      expect(listGoogleChatAccountIds(cfg)).toEqual([DEFAULT_ACCOUNT_ID]);
+      expect(() => resolveGoogleChatAccount({ cfg })).not.toThrow();
 
-    const account = resolveGoogleChatAccount({ cfg });
-    expect(account.accountId).toBe(DEFAULT_ACCOUNT_ID);
-    expect(account.credentialSource).toBe("none");
+      const account = resolveGoogleChatAccount({ cfg });
+      expect(account.accountId).toBe(DEFAULT_ACCOUNT_ID);
+      expect(account.credentialSource).toBe("none");
+    } finally {
+      if (originalServiceAccount === undefined) {
+        delete process.env["GOOGLE_CHAT_SERVICE_ACCOUNT"];
+      } else {
+        process.env["GOOGLE_CHAT_SERVICE_ACCOUNT"] = originalServiceAccount;
+      }
+      if (originalServiceAccountFile === undefined) {
+        delete process.env["GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"];
+      } else {
+        process.env["GOOGLE_CHAT_SERVICE_ACCOUNT_FILE"] = originalServiceAccountFile;
+      }
+    }
   });
 });
