@@ -154,6 +154,28 @@ describe("TuiStreamAssembler", () => {
     expect(finalText).toBe("Before tool call\nAfter tool call");
   });
 
+  it("replaces post-tool continuation snapshots instead of duplicating them", () => {
+    const assembler = new TuiStreamAssembler();
+
+    assembler.ingestDelta(
+      "run-post-tool-expand",
+      messageWithContent([text("Before tool call")]),
+      false,
+    );
+    assembler.ingestDelta(
+      "run-post-tool-expand",
+      messageWithContent([toolUse(), text("After tool call")]),
+      false,
+    );
+
+    const expanded = assembler.ingestDelta(
+      "run-post-tool-expand",
+      messageWithContent([toolUse(), text("After tool call (expanded)")]),
+      false,
+    );
+    expect(expanded).toBe("Before tool call\nAfter tool call (expanded)");
+  });
+
   for (const testCase of FINALIZE_BOUNDARY_CASES) {
     it(testCase.name, () => {
       const assembler = new TuiStreamAssembler();

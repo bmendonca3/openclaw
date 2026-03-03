@@ -10,6 +10,7 @@ type RunStreamState = {
   contentText: string;
   contentBlocks: string[];
   sawNonTextContentBlocks: boolean;
+  postBoundaryContinuationStart: number | null;
   displayText: string;
 };
 
@@ -119,6 +120,22 @@ function shouldAppendPostBoundaryContinuation(params: {
   return params.nextContentBlocks.every((block) => !params.streamedTextBlocks.includes(block));
 }
 
+function isSnapshotCompatibleContinuation(params: {
+  previousBlocks: string[];
+  nextBlocks: string[];
+}): boolean {
+  if (params.previousBlocks.length === 0 || params.nextBlocks.length === 0) {
+    return false;
+  }
+  if (params.previousBlocks.length !== params.nextBlocks.length) {
+    return false;
+  }
+  return params.nextBlocks.every((block, index) => {
+    const previous = params.previousBlocks[index] ?? "";
+    return block === previous || block.startsWith(previous) || previous.startsWith(block);
+  });
+}
+
 export class TuiStreamAssembler {
   private runs = new Map<string, RunStreamState>();
 
@@ -130,6 +147,7 @@ export class TuiStreamAssembler {
         contentText: "",
         contentBlocks: [],
         sawNonTextContentBlocks: false,
+        postBoundaryContinuationStart: null,
         displayText: "",
       };
       this.runs.set(runId, state);
@@ -169,11 +187,29 @@ export class TuiStreamAssembler {
       });
 
       if (shouldAppendContinuation) {
-        state.contentBlocks = [...state.contentBlocks, ...nextContentBlocks];
+        const continuationStart = state.postBoundaryContinuationStart;
+        const canReplacePriorContinuation =
+          continuationStart != null &&
+          continuationStart >= 0 &&
+          continuationStart <= state.contentBlocks.length &&
+          isSnapshotCompatibleContinuation({
+            previousBlocks: state.contentBlocks.slice(continuationStart),
+            nextBlocks: nextContentBlocks,
+          });
+        if (canReplacePriorContinuation && continuationStart != null) {
+          state.contentBlocks = [
+            ...state.contentBlocks.slice(0, continuationStart),
+            ...nextContentBlocks,
+          ];
+        } else {
+          state.postBoundaryContinuationStart = state.contentBlocks.length;
+          state.contentBlocks = [...state.contentBlocks, ...nextContentBlocks];
+        }
         state.contentText = state.contentBlocks.join("\n");
       } else if (!shouldKeepStreamedBoundaryText) {
         state.contentText = contentText;
         state.contentBlocks = nextContentBlocks;
+        state.postBoundaryContinuationStart = null;
       }
     }
     if (sawNonTextContentBlocks) {
