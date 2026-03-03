@@ -59,6 +59,7 @@ describe("model-selection", () => {
       expect(normalizeProviderId("OpenCode-Zen")).toBe("opencode");
       expect(normalizeProviderId("qwen")).toBe("qwen-portal");
       expect(normalizeProviderId("kimi-code")).toBe("kimi-coding");
+      expect(normalizeProviderId("nvidia-api")).toBe("nvidia");
       expect(normalizeProviderId("bedrock")).toBe("amazon-bedrock");
       expect(normalizeProviderId("aws-bedrock")).toBe("amazon-bedrock");
       expect(normalizeProviderId("amazon-bedrock")).toBe("amazon-bedrock");
@@ -85,6 +86,13 @@ describe("model-selection", () => {
       expect(parseModelRef("nvidia/moonshotai/kimi-k2.5", "anthropic")).toEqual({
         provider: "nvidia",
         model: "moonshotai/kimi-k2.5",
+      });
+    });
+
+    it("normalizes nvidia-api provider alias in model refs", () => {
+      expect(parseModelRef("nvidia-api/meta/llama-3.2-90b-vision-instruct", "anthropic")).toEqual({
+        provider: "nvidia",
+        model: "meta/llama-3.2-90b-vision-instruct",
       });
     });
 
