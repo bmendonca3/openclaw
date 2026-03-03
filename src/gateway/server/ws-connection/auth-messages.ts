@@ -12,8 +12,11 @@ export function formatControlUiDeviceIdentityRequiredMessage(): string {
   );
 }
 
+const CONTROL_UI_DEVICE_IDENTITY_REQUIRED_CLOSE_REASON =
+  "control ui requires device identity; use HTTPS/WSS or localhost; dev fallback: gateway.controlUi.allowInsecureAuth=true";
+
 export function formatControlUiDeviceIdentityRequiredCloseReason(): string {
-  return truncateCloseReason(formatControlUiDeviceIdentityRequiredMessage());
+  return truncateCloseReason(CONTROL_UI_DEVICE_IDENTITY_REQUIRED_CLOSE_REASON);
 }
 
 export function formatGatewayAuthFailureMessage(params: {

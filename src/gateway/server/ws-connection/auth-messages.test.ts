@@ -17,6 +17,7 @@ describe("formatControlUiDeviceIdentityRequiredMessage", () => {
   it("returns a close reason that fits within websocket limits", () => {
     const closeReason = formatControlUiDeviceIdentityRequiredCloseReason();
     expect(closeReason).toContain("control ui requires device identity");
+    expect(closeReason).toContain("gateway.controlUi.allowInsecureAuth=true");
     expect(Buffer.byteLength(closeReason, "utf8")).toBeLessThanOrEqual(120);
   });
 });
