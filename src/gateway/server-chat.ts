@@ -89,6 +89,34 @@ function isSilentReplyLeadFragment(text: string): boolean {
   return SILENT_REPLY_TOKEN.startsWith(normalized);
 }
 
+function isLikelyImageUrl(url: string): boolean {
+  if (!url) {
+    return false;
+  }
+  if (/^data:image\//i.test(url)) {
+    return true;
+  }
+  return /\.(png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i.test(url);
+}
+
+function collectAssistantImageUrls(data: Record<string, unknown>): string[] {
+  const rawMediaUrls = Array.isArray(data.mediaUrls) ? data.mediaUrls : [];
+  const out: string[] = [];
+  for (const entry of rawMediaUrls) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const trimmed = entry.trim();
+    if (!trimmed || !isLikelyImageUrl(trimmed)) {
+      continue;
+    }
+    if (!out.includes(trimmed)) {
+      out.push(trimmed);
+    }
+  }
+  return out;
+}
+
 export type ChatRunEntry = {
   sessionKey: string;
   clientRunId: string;
@@ -160,6 +188,7 @@ export type ChatRunState = {
   deltaSentAt: Map<string, number>;
   /** Length of text at the time of the last broadcast, used to avoid duplicate flushes. */
   deltaLastBroadcastLen: Map<string, number>;
+  imageUrls: Map<string, string[]>;
   abortedRuns: Map<string, number>;
   clear: () => void;
 };
@@ -169,6 +198,7 @@ export function createChatRunState(): ChatRunState {
   const buffers = new Map<string, string>();
   const deltaSentAt = new Map<string, number>();
   const deltaLastBroadcastLen = new Map<string, number>();
+  const imageUrls = new Map<string, string[]>();
   const abortedRuns = new Map<string, number>();
 
   const clear = () => {
@@ -176,6 +206,7 @@ export function createChatRunState(): ChatRunState {
     buffers.clear();
     deltaSentAt.clear();
     deltaLastBroadcastLen.clear();
+    imageUrls.clear();
     abortedRuns.clear();
   };
 
@@ -184,6 +215,7 @@ export function createChatRunState(): ChatRunState {
     buffers,
     deltaSentAt,
     deltaLastBroadcastLen,
+    imageUrls,
     abortedRuns,
     clear,
   };
@@ -357,6 +389,7 @@ export function createAgentEventHandler({
       text: bufferedText,
     });
     const text = normalizedHeartbeatText.text.trim();
+    const imageUrls = chatRunState.imageUrls.get(clientRunId) ?? [];
     const shouldSuppressSilent =
       normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
     const shouldSuppressSilentLeadFragment = isSilentReplyLeadFragment(text);
@@ -394,7 +427,15 @@ export function createAgentEventHandler({
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
+    chatRunState.imageUrls.delete(clientRunId);
     if (jobState === "done") {
+      const content: Array<Record<string, unknown>> = [];
+      if (text && !shouldSuppressSilent) {
+        content.push({ type: "text", text });
+      }
+      for (const imageUrl of imageUrls) {
+        content.push({ type: "image_url", image_url: { url: imageUrl } });
+      }
       const payload = {
         runId: clientRunId,
         sessionKey,
@@ -402,10 +443,10 @@ export function createAgentEventHandler({
         state: "final" as const,
         ...(stopReason && { stopReason }),
         message:
-          text && !shouldSuppressSilent
+          content.length > 0
             ? {
                 role: "assistant",
-                content: [{ type: "text", text }],
+                content,
                 timestamp: Date.now(),
               }
             : undefined,
@@ -511,8 +552,20 @@ export function createAgentEventHandler({
       if (!isToolEvent || toolVerbose !== "off") {
         nodeSendToSession(sessionKey, "agent", isToolEvent ? toolPayload : agentPayload);
       }
-      if (!isAborted && evt.stream === "assistant" && typeof evt.data?.text === "string") {
-        emitChatDelta(sessionKey, clientRunId, evt.runId, evt.seq, evt.data.text);
+      if (!isAborted && evt.stream === "assistant") {
+        const imageUrls = collectAssistantImageUrls(evt.data);
+        if (imageUrls.length > 0) {
+          const existing = chatRunState.imageUrls.get(clientRunId) ?? [];
+          for (const url of imageUrls) {
+            if (!existing.includes(url)) {
+              existing.push(url);
+            }
+          }
+          chatRunState.imageUrls.set(clientRunId, existing);
+        }
+        if (typeof evt.data?.text === "string") {
+          emitChatDelta(sessionKey, clientRunId, evt.runId, evt.seq, evt.data.text);
+        }
       } else if (!isAborted && (lifecyclePhase === "end" || lifecyclePhase === "error")) {
         const evtStopReason =
           typeof evt.data?.stopReason === "string" ? evt.data.stopReason : undefined;
@@ -547,6 +600,7 @@ export function createAgentEventHandler({
         chatRunState.abortedRuns.delete(evt.runId);
         chatRunState.buffers.delete(clientRunId);
         chatRunState.deltaSentAt.delete(clientRunId);
+        chatRunState.imageUrls.delete(clientRunId);
         if (chatLink) {
           chatRunState.registry.remove(evt.runId, clientRunId, sessionKey);
         }

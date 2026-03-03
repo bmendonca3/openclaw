@@ -638,4 +638,50 @@ describe("agent event handler", () => {
       "Disk usage crossed 95 percent on /data and needs cleanup now.",
     );
   });
+
+  it("includes assistant image_url blocks in final chat payload when mediaUrls are present", () => {
+    const { broadcast, chatRunState, handler } = createHarness({ now: 4_000 });
+    chatRunState.registry.add("run-images", {
+      sessionKey: "session-images",
+      clientRunId: "client-images",
+    });
+
+    handler({
+      runId: "run-images",
+      seq: 1,
+      stream: "assistant",
+      ts: Date.now(),
+      data: {
+        text: "Read image file",
+        mediaUrls: [
+          "https://example.com/cat.png",
+          "https://example.com/cat.png",
+          "https://example.com/file.pdf",
+        ],
+      },
+    });
+    emitLifecycleEnd(handler, "run-images");
+
+    const payload = chatBroadcastCalls(broadcast)
+      .map(([, eventPayload]) => eventPayload as { state?: string; message?: unknown })
+      .find((eventPayload) => eventPayload.state === "final") as
+      | {
+          message?: { content?: Array<Record<string, unknown>> };
+        }
+      | undefined;
+    expect(payload).toBeDefined();
+    const finalPayload = payload as {
+      message?: { content?: Array<Record<string, unknown>> };
+    };
+    const content = finalPayload.message?.content ?? [];
+    expect(content).toContainEqual({ type: "text", text: "Read image file" });
+    expect(content).toContainEqual({
+      type: "image_url",
+      image_url: { url: "https://example.com/cat.png" },
+    });
+    expect(content).not.toContainEqual({
+      type: "image_url",
+      image_url: { url: "https://example.com/file.pdf" },
+    });
+  });
 });
