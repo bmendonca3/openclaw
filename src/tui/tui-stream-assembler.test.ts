@@ -198,6 +198,33 @@ describe("TuiStreamAssembler", () => {
     expect(overlap).toBe("Before tool call\nAfter 1\nAfter 2");
   });
 
+  it("preserves pre-tool text on mixed-overlap continuation updates", () => {
+    const assembler = new TuiStreamAssembler();
+
+    assembler.ingestDelta(
+      "run-post-tool-mixed-overlap",
+      messageWithContent([text("Before tool call")]),
+      false,
+    );
+    assembler.ingestDelta(
+      "run-post-tool-mixed-overlap",
+      messageWithContent([toolUse(), text("After 1")]),
+      false,
+    );
+    assembler.ingestDelta(
+      "run-post-tool-mixed-overlap",
+      messageWithContent([toolUse(), text("After 1"), text("After 2")]),
+      false,
+    );
+
+    const revised = assembler.ingestDelta(
+      "run-post-tool-mixed-overlap",
+      messageWithContent([toolUse(), text("After 1 revised"), text("After 2")]),
+      false,
+    );
+    expect(revised).toBe("Before tool call\nAfter 1 revised\nAfter 2");
+  });
+
   for (const testCase of FINALIZE_BOUNDARY_CASES) {
     it(testCase.name, () => {
       const assembler = new TuiStreamAssembler();

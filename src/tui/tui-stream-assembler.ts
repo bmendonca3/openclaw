@@ -207,15 +207,23 @@ export class TuiStreamAssembler {
         nextContentBlocks,
       });
       const continuationStart = state.postBoundaryContinuationStart;
-      const overlapMergedContinuation =
+      const existingContinuation =
         continuationStart != null &&
         continuationStart >= 0 &&
         continuationStart <= state.contentBlocks.length
+          ? state.contentBlocks.slice(continuationStart)
+          : [];
+      const overlapMergedContinuation =
+        continuationStart != null && existingContinuation.length > 0
           ? mergeContinuationWithOverlap({
-              previousBlocks: state.contentBlocks.slice(continuationStart),
+              previousBlocks: existingContinuation,
               nextBlocks: nextContentBlocks,
             })
           : null;
+      const hasContinuationBlockOverlap =
+        continuationStart != null &&
+        existingContinuation.length > 0 &&
+        nextContentBlocks.some((block) => existingContinuation.includes(block));
 
       if (overlapMergedContinuation && continuationStart != null) {
         state.contentBlocks = [
@@ -229,7 +237,7 @@ export class TuiStreamAssembler {
           continuationStart >= 0 &&
           continuationStart <= state.contentBlocks.length &&
           isSnapshotCompatibleContinuation({
-            previousBlocks: state.contentBlocks.slice(continuationStart),
+            previousBlocks: existingContinuation,
             nextBlocks: nextContentBlocks,
           });
         if (canReplacePriorContinuation && continuationStart != null) {
@@ -241,6 +249,17 @@ export class TuiStreamAssembler {
           state.postBoundaryContinuationStart = state.contentBlocks.length;
           state.contentBlocks = [...state.contentBlocks, ...nextContentBlocks];
         }
+        state.contentText = state.contentBlocks.join("\n");
+      } else if (
+        !shouldKeepStreamedBoundaryText &&
+        boundaryDropMode === "streamed-or-incoming" &&
+        hasContinuationBlockOverlap &&
+        continuationStart != null
+      ) {
+        state.contentBlocks = [
+          ...state.contentBlocks.slice(0, continuationStart),
+          ...nextContentBlocks,
+        ];
         state.contentText = state.contentBlocks.join("\n");
       } else if (!shouldKeepStreamedBoundaryText) {
         state.contentText = contentText;
