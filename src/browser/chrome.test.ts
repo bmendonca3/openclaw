@@ -350,8 +350,8 @@ describe("browser chrome helpers", () => {
     });
   });
 
-  it("stopOpenClawChrome no-ops when process is already killed", async () => {
-    const proc = makeChromeTestProc({ killed: true });
+  it("stopOpenClawChrome no-ops when process already exited", async () => {
+    const proc = makeChromeTestProc({ killed: true, exitCode: 0 });
     await stopChromeWithProc(proc, 10);
     expect(proc.kill).not.toHaveBeenCalled();
   });
@@ -372,6 +372,20 @@ describe("browser chrome helpers", () => {
       } as unknown as Response),
     );
     const proc = makeChromeTestProc();
+    await stopChromeWithProc(proc, 1);
+    expect(proc.kill).toHaveBeenNthCalledWith(1, "SIGTERM");
+    expect(proc.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
+  });
+
+  it("stopOpenClawChrome retries kill when proc.killed is true but still running", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ webSocketDebuggerUrl: "ws://127.0.0.1/devtools" }),
+      } as unknown as Response),
+    );
+    const proc = makeChromeTestProc({ killed: true, exitCode: null });
     await stopChromeWithProc(proc, 1);
     expect(proc.kill).toHaveBeenNthCalledWith(1, "SIGTERM");
     expect(proc.kill).toHaveBeenNthCalledWith(2, "SIGKILL");

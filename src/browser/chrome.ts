@@ -399,7 +399,7 @@ export async function stopOpenClawChrome(
   timeoutMs = CHROME_STOP_TIMEOUT_MS,
 ) {
   const proc = running.proc;
-  if (proc.killed) {
+  if (proc.exitCode !== null) {
     return;
   }
   try {
@@ -410,8 +410,8 @@ export async function stopOpenClawChrome(
 
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if (!proc.exitCode && proc.killed) {
-      break;
+    if (proc.exitCode !== null) {
+      return;
     }
     if (!(await isChromeReachable(cdpUrlForPort(running.cdpPort), CHROME_STOP_PROBE_TIMEOUT_MS))) {
       return;
@@ -419,6 +419,9 @@ export async function stopOpenClawChrome(
     await new Promise((r) => setTimeout(r, 100));
   }
 
+  if (proc.exitCode !== null) {
+    return;
+  }
   try {
     proc.kill("SIGKILL");
   } catch {
