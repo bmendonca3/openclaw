@@ -396,8 +396,8 @@ export async function startGatewayServer(
     });
   }
 
+  cfgAtStart = loadConfig();
   const authSnapshot = await readConfigFileSnapshot();
-  cfgAtStart = authSnapshot.config;
   const authBootstrap = await ensureGatewayStartupAuth({
     cfg: cfgAtStart,
     env: process.env,
