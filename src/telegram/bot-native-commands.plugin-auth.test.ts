@@ -166,7 +166,7 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
     expect(bot.api.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("blocks requireAuth plugin commands from channel_post when allowFrom is not configured", async () => {
+  it("blocks channel_post plugin commands when the channel is not configured", async () => {
     const command = {
       name: "plugin",
       description: "Plugin command",
@@ -227,14 +227,11 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
       match: "",
     });
 
-    expect(bot.api.sendMessage).toHaveBeenCalledWith(
-      -100123,
-      "You are not authorized to use this command.",
-    );
+    expect(bot.api.sendMessage).toHaveBeenCalledWith(-100123, "This channel is disabled.");
     expect(executePluginCommand).not.toHaveBeenCalled();
   });
 
-  it("allows requireAuth plugin commands from channel_post when allowFrom includes the channel id", async () => {
+  it("allows requireAuth plugin commands from configured channel_post chats", async () => {
     const command = {
       name: "plugin",
       description: "Plugin command",
@@ -263,7 +260,7 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
       runtime: {} as unknown as RuntimeEnv,
       accountId: "default",
       telegramCfg: {} as TelegramAccountConfig,
-      allowFrom: ["-100123"],
+      allowFrom: [],
       groupAllowFrom: [],
       replyToMode: "off",
       textLimit: 4000,
@@ -276,10 +273,11 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
           allowlistEnabled: false,
           allowed: true,
         }) as ChannelGroupPolicy,
-      resolveTelegramGroupConfig: () => ({
-        groupConfig: undefined,
-        topicConfig: undefined,
-      }),
+      resolveTelegramGroupConfig: () =>
+        ({
+          groupConfig: { enabled: true },
+          topicConfig: undefined,
+        }) as { groupConfig?: { enabled?: boolean }; topicConfig?: undefined },
       shouldSkipUpdate: () => false,
       opts: { token: "token" },
     });
@@ -300,13 +298,10 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
         isAuthorizedSender: true,
       }),
     );
-    expect(bot.api.sendMessage).not.toHaveBeenCalledWith(
-      -100123,
-      "You are not authorized to use this command.",
-    );
+    expect(bot.api.sendMessage).not.toHaveBeenCalledWith(-100123, "This channel is disabled.");
   });
 
-  it("allows requireAuth:false plugin commands from channel_post even when sender is unauthorized", async () => {
+  it("runs requireAuth:false channel_post commands when channel is configured", async () => {
     const command = {
       name: "plugin",
       description: "Plugin command",
@@ -348,10 +343,11 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
           allowlistEnabled: false,
           allowed: true,
         }) as ChannelGroupPolicy,
-      resolveTelegramGroupConfig: () => ({
-        groupConfig: undefined,
-        topicConfig: undefined,
-      }),
+      resolveTelegramGroupConfig: () =>
+        ({
+          groupConfig: { enabled: true },
+          topicConfig: undefined,
+        }) as { groupConfig?: { enabled?: boolean }; topicConfig?: undefined },
       shouldSkipUpdate: () => false,
       opts: { token: "token" },
     });
@@ -369,13 +365,13 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
 
     expect(executePluginCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        isAuthorizedSender: false,
+        isAuthorizedSender: true,
       }),
     );
-    expect(bot.api.sendMessage).not.toHaveBeenCalled();
+    expect(bot.api.sendMessage).not.toHaveBeenCalledWith(-100123, "This channel is disabled.");
   });
 
-  it("allows requireAuth plugin commands from channel_post only with explicit wildcard allowFrom", async () => {
+  it("routes channel_post plugin commands through telegram group context", async () => {
     const command = {
       name: "plugin",
       description: "Plugin command",
@@ -404,7 +400,7 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
       runtime: {} as unknown as RuntimeEnv,
       accountId: "default",
       telegramCfg: {} as TelegramAccountConfig,
-      allowFrom: ["*"],
+      allowFrom: [],
       groupAllowFrom: [],
       replyToMode: "off",
       textLimit: 4000,
@@ -417,10 +413,11 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
           allowlistEnabled: false,
           allowed: true,
         }) as ChannelGroupPolicy,
-      resolveTelegramGroupConfig: () => ({
-        groupConfig: undefined,
-        topicConfig: undefined,
-      }),
+      resolveTelegramGroupConfig: () =>
+        ({
+          groupConfig: { enabled: true },
+          topicConfig: undefined,
+        }) as { groupConfig?: { enabled?: boolean }; topicConfig?: undefined },
       shouldSkipUpdate: () => false,
       opts: { token: "token" },
     });
@@ -438,12 +435,9 @@ describe("registerTelegramNativeCommands (plugin auth)", () => {
 
     expect(executePluginCommand).toHaveBeenCalledWith(
       expect.objectContaining({
-        isAuthorizedSender: true,
+        from: "telegram:group:-100123",
+        to: "telegram:-100123",
       }),
-    );
-    expect(bot.api.sendMessage).not.toHaveBeenCalledWith(
-      -100123,
-      "You are not authorized to use this command.",
     );
   });
 });

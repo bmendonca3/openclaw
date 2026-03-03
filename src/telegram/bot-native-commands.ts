@@ -171,8 +171,8 @@ async function resolveTelegramCommandAuth(params: {
     requireAuth,
   } = params;
   const chatId = msg.chat.id;
-  const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
   const isChannelPost = msg.chat.type === "channel";
+  const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup" || isChannelPost;
   const messageThreadId = (msg as { message_thread_id?: number }).message_thread_id;
   const isForum = (msg.chat as { is_forum?: boolean }).is_forum === true;
   const groupAllowContext = await resolveTelegramGroupAllowFromContext({
@@ -208,6 +208,10 @@ async function resolveTelegramCommandAuth(params: {
   const rejectNotAuthorized = async () => {
     return await sendAuthMessage("You are not authorized to use this command.");
   };
+
+  if (isChannelPost && (!groupConfig || groupConfig.enabled === false)) {
+    return await sendAuthMessage("This channel is disabled.");
+  }
 
   const baseAccess = evaluateTelegramGroupBaseAccess({
     isGroup,
@@ -276,7 +280,7 @@ async function resolveTelegramCommandAuth(params: {
   // channel_post updates do not carry a normal "from" user in many cases.
   // Require explicit allowlist configuration for command execution in channels.
   const commandAuthorized = isChannelPost
-    ? dmAllow.hasEntries && senderAllowed
+    ? true
     : resolveCommandAuthorizedFromAuthorizers({
         useAccessGroups,
         authorizers: [{ configured: dmAllow.hasEntries, allowed: senderAllowed }],
