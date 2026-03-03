@@ -335,6 +335,20 @@ describe("gateway auth", () => {
     });
   });
 
+  it("keeps tailscale header auth enabled when trusted proxies make the request local-direct", async () => {
+    const res = await authorizeWsControlUiGatewayConnect({
+      auth: { mode: "token", token: "secret", allowTailscale: true },
+      connectAuth: null,
+      tailscaleWhois: createTailscaleWhois(),
+      trustedProxies: ["127.0.0.1"],
+      req: createTailscaleForwardedReq(),
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.method).toBe("tailscale");
+    expect(res.user).toBe("peter");
+  });
+
   it("uses proxy-aware request client IP by default for rate-limit checks", async () => {
     const limiter = await expectTokenMismatchWithLimiter({
       reqHeaders: { "x-forwarded-for": "203.0.113.10" },
