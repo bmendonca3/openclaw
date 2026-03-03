@@ -463,9 +463,9 @@ describe("loginGeminiCliOAuth", () => {
     )?.[0];
     expect(tokenCall).toBeDefined();
     const allowedHostnames = tokenCall?.policy?.allowedHostnames as string[] | undefined;
+    expect(allowedHostnames).toHaveLength(5);
     expect(allowedHostnames).toEqual(
       expect.arrayContaining([
-        "accounts.google.com",
         "oauth2.googleapis.com",
         "www.googleapis.com",
         "cloudcode-pa.googleapis.com",

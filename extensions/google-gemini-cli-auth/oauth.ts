@@ -29,7 +29,7 @@ const SCOPES = [
 ];
 const GEMINI_OAUTH_ALLOWED_HOSTNAMES = Array.from(
   new Set(
-    [AUTH_URL, TOKEN_URL, USERINFO_URL, ...LOAD_CODE_ASSIST_ENDPOINTS].map((url) => {
+    [TOKEN_URL, USERINFO_URL, ...LOAD_CODE_ASSIST_ENDPOINTS].map((url) => {
       const parsed = new URL(url);
       return parsed.hostname;
     }),
