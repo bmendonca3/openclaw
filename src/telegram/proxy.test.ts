@@ -114,4 +114,10 @@ describe("shouldBypassProxyForUrl", () => {
     expect(shouldBypassProxyForUrl("https://localhost:9000")).toBe(true);
     expect(shouldBypassProxyForUrl("https://example.org")).toBe(false);
   });
+
+  it("does not broaden port-scoped NO_PROXY entries", () => {
+    process.env.NO_PROXY = "api.telegram.org:8443";
+    expect(shouldBypassProxyForUrl("https://api.telegram.org")).toBe(false);
+    expect(shouldBypassProxyForUrl("https://api.telegram.org:8443")).toBe(true);
+  });
 });

@@ -36,38 +36,66 @@ export function resolveProxyUrlFromEnv(): string | undefined {
   return undefined;
 }
 
-function normalizeNoProxyEntry(value: string): string {
+type NoProxyEntry = { wildcard: true } | { wildcard: false; host: string; port: string | null };
+
+function normalizeNoProxyEntry(value: string): NoProxyEntry | null {
   let normalized = value.trim().toLowerCase();
   if (!normalized) {
-    return "";
+    return null;
   }
   if (normalized === "*") {
-    return normalized;
+    return { wildcard: true };
   }
   normalized = normalized.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
   normalized = normalized.split("/")[0] ?? normalized;
+
+  let host = normalized;
+  let port: string | null = null;
   if (normalized.startsWith("[")) {
     const end = normalized.indexOf("]");
     if (end > 0) {
-      normalized = normalized.slice(1, end);
+      host = normalized.slice(1, end);
+      const remainder = normalized.slice(end + 1);
+      const portMatch = remainder.match(/^:(\d+)$/);
+      if (portMatch?.[1]) {
+        port = portMatch[1];
+      }
     }
   } else {
-    const match = normalized.match(/^(.*):\d+$/);
-    if (match?.[1]) {
-      normalized = match[1];
+    const hostPortMatch = normalized.match(/^(.*):(\d+)$/);
+    if (hostPortMatch?.[1] && hostPortMatch[2]) {
+      host = hostPortMatch[1];
+      port = hostPortMatch[2];
     }
   }
-  if (normalized.startsWith("*.")) {
-    normalized = normalized.slice(2);
+
+  if (host.startsWith("*.")) {
+    host = host.slice(2);
   }
-  return normalized;
+  if (!host) {
+    return null;
+  }
+  return { wildcard: false, host, port };
 }
 
-function resolveNoProxyEntries(noProxy?: string | string[]): string[] {
+function resolveNoProxyEntries(noProxy?: string | string[]): NoProxyEntry[] {
   const raw =
     typeof noProxy === "undefined" ? (process.env.NO_PROXY ?? process.env.no_proxy ?? "") : noProxy;
   const list = Array.isArray(raw) ? raw : raw.split(",");
-  return list.map(normalizeNoProxyEntry).filter(Boolean);
+  return list.map(normalizeNoProxyEntry).filter((entry): entry is NoProxyEntry => entry !== null);
+}
+
+function resolveDefaultPort(protocol: string): string | null {
+  switch (protocol.toLowerCase()) {
+    case "http:":
+    case "ws:":
+      return "80";
+    case "https:":
+    case "wss:":
+      return "443";
+    default:
+      return null;
+  }
 }
 
 /**
@@ -76,8 +104,11 @@ function resolveNoProxyEntries(noProxy?: string | string[]): string[] {
  */
 export function shouldBypassProxyForUrl(url: string, noProxy?: string | string[]): boolean {
   let hostname: string;
+  let port: string | null;
   try {
-    hostname = new URL(url).hostname.trim().toLowerCase();
+    const parsed = new URL(url);
+    hostname = parsed.hostname.trim().toLowerCase();
+    port = parsed.port || resolveDefaultPort(parsed.protocol);
   } catch {
     return false;
   }
@@ -87,17 +118,20 @@ export function shouldBypassProxyForUrl(url: string, noProxy?: string | string[]
 
   const entries = resolveNoProxyEntries(noProxy);
   for (const entry of entries) {
-    if (entry === "*") {
+    if (entry.wildcard) {
       return true;
     }
-    if (entry.startsWith(".")) {
-      const suffix = entry.slice(1);
+    if (entry.port && port && entry.port !== port) {
+      continue;
+    }
+    if (entry.host.startsWith(".")) {
+      const suffix = entry.host.slice(1);
       if (suffix && (hostname === suffix || hostname.endsWith(`.${suffix}`))) {
         return true;
       }
       continue;
     }
-    if (hostname === entry || hostname.endsWith(`.${entry}`)) {
+    if (hostname === entry.host || hostname.endsWith(`.${entry.host}`)) {
       return true;
     }
   }
