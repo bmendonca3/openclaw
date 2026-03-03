@@ -61,6 +61,23 @@ describe("telegramPlugin security warnings", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("warns when groupAllowFrom is explicitly empty even if allowFrom has entries", async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          enabled: true,
+          botToken: "token",
+          groupPolicy: "allowlist",
+          groupAllowFrom: [],
+          allowFrom: ["123456"],
+        },
+      },
+    } as OpenClawConfig;
+    const account = telegramPlugin.config.resolveAccount(cfg, "default");
+    const warnings = (await telegramPlugin.security?.collectWarnings?.({ account, cfg })) ?? [];
+    expect(warnings.join("\n")).toContain('groupPolicy="allowlist" is active');
+  });
+
   it("warns for mixed overrides when account-level allowlist is still missing", async () => {
     const cfg = {
       channels: {

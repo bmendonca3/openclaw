@@ -219,10 +219,11 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount, TelegramProb
           group?.groupPolicy === "open" ||
           Object.values(group?.topics ?? {}).some((topic) => topic?.groupPolicy === "open"),
       );
-      const hasSenderAllowlist =
-        hasExplicitAllowEntries(account.config.groupAllowFrom) ||
-        hasExplicitAllowEntries(account.config.allowFrom) ||
-        hasGroupOrTopicAllowFrom;
+      const hasAccountSenderAllowlist =
+        typeof account.config.groupAllowFrom !== "undefined"
+          ? hasExplicitAllowEntries(account.config.groupAllowFrom)
+          : hasExplicitAllowEntries(account.config.allowFrom);
+      const hasSenderAllowlist = hasAccountSenderAllowlist || hasGroupOrTopicAllowFrom;
       const useAccountPath = Boolean(cfg.channels?.telegram?.accounts?.[account.accountId]);
       const basePath = useAccountPath
         ? `channels.telegram.accounts.${account.accountId}`
