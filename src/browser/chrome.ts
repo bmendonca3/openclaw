@@ -78,6 +78,10 @@ function cdpUrlForPort(cdpPort: number) {
   return `http://127.0.0.1:${cdpPort}`;
 }
 
+function isProcessExited(proc: Pick<ChildProcessWithoutNullStreams, "exitCode" | "signalCode">) {
+  return proc.exitCode !== null || proc.signalCode !== null;
+}
+
 export async function isChromeReachable(
   cdpUrl: string,
   timeoutMs = CHROME_REACHABILITY_TIMEOUT_MS,
@@ -399,7 +403,7 @@ export async function stopOpenClawChrome(
   timeoutMs = CHROME_STOP_TIMEOUT_MS,
 ) {
   const proc = running.proc;
-  if (proc.exitCode !== null) {
+  if (isProcessExited(proc)) {
     return;
   }
   try {
@@ -410,7 +414,7 @@ export async function stopOpenClawChrome(
 
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if (proc.exitCode !== null) {
+    if (isProcessExited(proc)) {
       return;
     }
     if (!(await isChromeReachable(cdpUrlForPort(running.cdpPort), CHROME_STOP_PROBE_TIMEOUT_MS))) {
@@ -419,7 +423,7 @@ export async function stopOpenClawChrome(
     await new Promise((r) => setTimeout(r, 100));
   }
 
-  if (proc.exitCode !== null) {
+  if (isProcessExited(proc)) {
     return;
   }
   try {

@@ -90,10 +90,17 @@ async function stopChromeWithProc(proc: ReturnType<typeof makeChromeTestProc>, t
   );
 }
 
-function makeChromeTestProc(overrides?: Partial<{ killed: boolean; exitCode: number | null }>) {
+function makeChromeTestProc(
+  overrides?: Partial<{
+    killed: boolean;
+    exitCode: number | null;
+    signalCode: NodeJS.Signals | null;
+  }>,
+) {
   return {
     killed: overrides?.killed ?? false,
     exitCode: overrides?.exitCode ?? null,
+    signalCode: overrides?.signalCode ?? null,
     kill: vi.fn(),
   };
 }
@@ -352,6 +359,12 @@ describe("browser chrome helpers", () => {
 
   it("stopOpenClawChrome no-ops when process already exited", async () => {
     const proc = makeChromeTestProc({ killed: true, exitCode: 0 });
+    await stopChromeWithProc(proc, 10);
+    expect(proc.kill).not.toHaveBeenCalled();
+  });
+
+  it("stopOpenClawChrome no-ops when process exited by signal", async () => {
+    const proc = makeChromeTestProc({ signalCode: "SIGTERM" });
     await stopChromeWithProc(proc, 10);
     expect(proc.kill).not.toHaveBeenCalled();
   });
