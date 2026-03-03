@@ -248,6 +248,24 @@ describe("extractAssistantText", () => {
     expect(result).toBe("BeforeAfter");
   });
 
+  it("keeps literal tool_call explanations with unrelated self-closing tags", () => {
+    const msg = makeAssistantMessage({
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: "To use the legacy format, write <tool_call> followed by args.\nHere is a JSX snippet: <Component />",
+        },
+      ],
+      timestamp: Date.now(),
+    });
+
+    const result = extractAssistantText(msg);
+    expect(result).toBe(
+      "To use the legacy format, write <tool_call> followed by args.\nHere is a JSX snippet: <Component />",
+    );
+  });
+
   it("handles multiple invoke blocks in one message", () => {
     const msg = makeAssistantMessage({
       role: "assistant",
