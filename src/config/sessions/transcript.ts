@@ -100,7 +100,10 @@ function isDuplicateAssistantTail(params: {
     }
     const message = entry.message as Record<string, unknown>;
     if (typeof message.role !== "string" || message.role !== "assistant") {
-      continue;
+      return false;
+    }
+    if (message.provider !== "openclaw" || message.model !== "delivery-mirror") {
+      return false;
     }
     const lastAssistantText = extractAssistantText(message);
     return lastAssistantText === params.mirrorText;
