@@ -260,7 +260,7 @@ function resolveExplicitFallbackRef(params: {
     return resolved.ref;
   }
   const explicitProvider = normalizeProviderId(params.raw.slice(0, slash).trim());
-  if (explicitProvider === "openai" && resolved.ref.provider === "openai-codex") {
+  if (explicitProvider && explicitProvider !== resolved.ref.provider) {
     return { provider: explicitProvider, model: resolved.ref.model };
   }
   return resolved.ref;
