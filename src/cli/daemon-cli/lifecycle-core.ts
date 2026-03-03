@@ -165,6 +165,23 @@ export async function runServiceStart(params: {
   }
   if (!loaded) {
     if (params.service.label === "LaunchAgent") {
+      let hasLaunchAgentConfig = false;
+      try {
+        hasLaunchAgentConfig = (await params.service.readCommand(process.env)) != null;
+      } catch {
+        hasLaunchAgentConfig = false;
+      }
+      if (!hasLaunchAgentConfig) {
+        await handleServiceNotLoaded({
+          serviceNoun: params.serviceNoun,
+          service: params.service,
+          loaded,
+          renderStartHints: params.renderStartHints,
+          json,
+          emit,
+        });
+        return;
+      }
       try {
         await params.service.restart({ env: process.env, stdout });
       } catch (err) {

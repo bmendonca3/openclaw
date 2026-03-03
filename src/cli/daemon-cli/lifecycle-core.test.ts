@@ -143,6 +143,25 @@ describe("runServiceRestart token drift", () => {
     expect(payload.result).toBe("started");
   });
 
+  it("keeps LaunchAgent not-loaded result when plist command is missing", async () => {
+    service.label = "LaunchAgent";
+    service.isLoaded.mockResolvedValue(false);
+    service.readCommand.mockResolvedValue(null);
+
+    await runServiceStart({
+      serviceNoun: "Gateway",
+      service,
+      renderStartHints: () => ["openclaw gateway install --force"],
+      opts: { json: true },
+    });
+
+    expect(service.restart).not.toHaveBeenCalled();
+    const jsonLine = runtimeLogs.find((line) => line.trim().startsWith("{"));
+    const payload = JSON.parse(jsonLine ?? "{}") as { result?: string; ok?: boolean };
+    expect(payload.ok).toBe(true);
+    expect(payload.result).toBe("not-loaded");
+  });
+
   it("keeps non-LaunchAgent start behavior when service is not loaded", async () => {
     service.label = "TestService";
     service.isLoaded.mockResolvedValue(false);
