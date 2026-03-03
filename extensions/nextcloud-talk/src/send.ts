@@ -4,6 +4,7 @@ import { generateNextcloudTalkSignature } from "./signature.js";
 import type { CoreConfig, NextcloudTalkSendResult } from "./types.js";
 
 type NextcloudTalkSendOpts = {
+  cfg?: CoreConfig;
   baseUrl?: string;
   secret?: string;
   accountId?: string;

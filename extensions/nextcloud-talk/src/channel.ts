@@ -264,6 +264,7 @@ export const nextcloudTalkPlugin: ChannelPlugin<ResolvedNextcloudTalkAccount> = 
     textChunkLimit: 4000,
     sendText: async ({ cfg, to, text, accountId, replyToId }) => {
       const result = await sendMessageNextcloudTalk(to, text, {
+        cfg: cfg as CoreConfig,
         accountId: accountId ?? undefined,
         replyTo: replyToId ?? undefined,
         cfg: cfg as CoreConfig,
@@ -273,6 +274,7 @@ export const nextcloudTalkPlugin: ChannelPlugin<ResolvedNextcloudTalkAccount> = 
     sendMedia: async ({ cfg, to, text, mediaUrl, accountId, replyToId }) => {
       const messageWithMedia = mediaUrl ? `${text}\n\nAttachment: ${mediaUrl}` : text;
       const result = await sendMessageNextcloudTalk(to, messageWithMedia, {
+        cfg: cfg as CoreConfig,
         accountId: accountId ?? undefined,
         replyTo: replyToId ?? undefined,
         cfg: cfg as CoreConfig,
