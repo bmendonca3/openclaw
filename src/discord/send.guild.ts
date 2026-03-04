@@ -5,8 +5,8 @@ import type {
   APIRole,
   APIVoiceState,
   RESTPostAPIGuildScheduledEventJSONBody,
-} from "discord-api-types/v10";
-import { Routes } from "discord-api-types/v10";
+} from "./api-types-runtime.js";
+import { Routes } from "./api-types-runtime.js";
 import { resolveDiscordRest } from "./send.shared.js";
 import type {
   DiscordModerationTarget,

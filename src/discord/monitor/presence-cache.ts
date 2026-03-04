@@ -1,4 +1,4 @@
-import type { GatewayPresenceUpdate } from "discord-api-types/v10";
+import type { GatewayPresenceUpdate } from "../api-types-runtime.js";
 
 /**
  * In-memory cache of Discord user presence data.

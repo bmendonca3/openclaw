@@ -9,7 +9,6 @@ import {
 } from "@buape/carbon";
 import { GatewayCloseCodes, type GatewayPlugin } from "@buape/carbon/gateway";
 import { VoicePlugin } from "@buape/carbon/voice";
-import { Routes } from "discord-api-types/v10";
 import { getAcpSessionManager } from "../../acp/control-plane/manager.js";
 import { isAcpRuntimeError } from "../../acp/runtime/errors.js";
 import { resolveTextChunkLimit } from "../../auto-reply/chunk.js";
@@ -43,6 +42,7 @@ import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { getPluginCommandSpecs } from "../../plugins/commands.js";
 import { createNonExitingRuntime, type RuntimeEnv } from "../../runtime.js";
 import { resolveDiscordAccount } from "../accounts.js";
+import { Routes } from "../api-types-runtime.js";
 import { fetchDiscordApplicationId } from "../probe.js";
 import { normalizeDiscordToken } from "../token.js";
 import { createDiscordVoiceCommand } from "../voice/command.js";

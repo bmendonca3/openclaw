@@ -1,5 +1,5 @@
-import type { APIChannel, APIMessage } from "discord-api-types/v10";
-import { ChannelType, Routes } from "discord-api-types/v10";
+import type { APIChannel, APIMessage } from "./api-types-runtime.js";
+import { ChannelType, Routes } from "./api-types-runtime.js";
 import { resolveDiscordRest } from "./send.shared.js";
 import type {
   DiscordMessageEdit,
@@ -108,7 +108,7 @@ export async function createThreadDiscord(
   if (!payload.messageId && payload.type !== undefined) {
     body.type = payload.type;
   }
-  let channelType: ChannelType | undefined;
+  let channelType: APIChannel["type"] | undefined;
   if (!payload.messageId) {
     // Only detect channel kind for route-less thread creation.
     // If this lookup fails, keep prior behavior and let Discord validate.

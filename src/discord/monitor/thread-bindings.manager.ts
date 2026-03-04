@@ -1,4 +1,3 @@
-import { Routes } from "discord-api-types/v10";
 import { logVerbose } from "../../globals.js";
 import {
   registerSessionBindingAdapter,
@@ -7,6 +6,7 @@ import {
   type SessionBindingRecord,
 } from "../../infra/outbound/session-binding-service.js";
 import { normalizeAccountId, resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
+import { Routes } from "../api-types-runtime.js";
 import { createDiscordRestClient } from "../client.js";
 import {
   createThreadForBinding,

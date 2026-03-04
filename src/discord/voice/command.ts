@@ -5,15 +5,15 @@ import {
   type CommandInteraction,
   type CommandOptions,
 } from "@buape/carbon";
-import {
-  ApplicationCommandOptionType,
-  ChannelType as DiscordChannelType,
-  type APIApplicationCommandChannelOption,
-} from "discord-api-types/v10";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { isDangerousNameMatchingEnabled } from "../../config/dangerous-name-matching.js";
 import type { DiscordAccountConfig } from "../../config/types.js";
+import {
+  ApplicationCommandOptionType,
+  ChannelType as DiscordChannelType,
+  type APIApplicationCommandChannelOption,
+} from "../api-types-runtime.js";
 import { formatMention } from "../mentions.js";
 import {
   isDiscordGroupAllowedByPolicy,

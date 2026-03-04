@@ -1,6 +1,6 @@
 import type { RequestClient } from "@buape/carbon";
-import { Routes } from "discord-api-types/v10";
 import { createFinalizableDraftLifecycle } from "../channels/draft-stream-controls.js";
+import { Routes } from "./api-types-runtime.js";
 
 /** Discord messages cap at 2000 characters. */
 const DISCORD_STREAM_MAX_CHARS = 2000;

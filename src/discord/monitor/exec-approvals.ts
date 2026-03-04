@@ -9,7 +9,6 @@ import {
   type MessagePayloadObject,
   type TopLevelComponents,
 } from "@buape/carbon";
-import { ButtonStyle, Routes } from "discord-api-types/v10";
 import type { OpenClawConfig } from "../../config/config.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import type { DiscordExecApprovalConfig } from "../../config/types.discord.js";
@@ -30,11 +29,13 @@ import {
   GATEWAY_CLIENT_NAMES,
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
+import { ButtonStyle, Routes } from "../api-types-runtime.js";
 import { createDiscordClient, stripUndefinedFields } from "../send.shared.js";
 import { DiscordUiContainer } from "../ui.js";
 
 const EXEC_APPROVAL_KEY = "execapproval";
 export type { ExecApprovalRequest, ExecApprovalResolved };
+type DiscordButtonStyle = (typeof ButtonStyle)[keyof typeof ButtonStyle];
 
 /** Extract Discord channel ID from a session key like "agent:main:discord:channel:123456789" */
 export function extractDiscordChannelId(sessionKey?: string | null): string | null {
@@ -140,13 +141,13 @@ class ExecApprovalContainer extends DiscordUiContainer {
 class ExecApprovalActionButton extends Button {
   customId: string;
   label: string;
-  style: ButtonStyle;
+  style: DiscordButtonStyle;
 
   constructor(params: {
     approvalId: string;
     action: ExecApprovalDecision;
     label: string;
-    style: ButtonStyle;
+    style: DiscordButtonStyle;
   }) {
     super();
     this.customId = buildExecApprovalCustomId(params.approvalId, params.action);

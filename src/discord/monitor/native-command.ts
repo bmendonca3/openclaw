@@ -13,7 +13,6 @@ import {
   type ComponentData,
   type StringSelectMenuInteraction,
 } from "@buape/carbon";
-import { ApplicationCommandOptionType, ButtonStyle } from "discord-api-types/v10";
 import { resolveHumanDelayConfig } from "../../agents/identity.js";
 import { resolveChunkMode, resolveTextChunkLimit } from "../../auto-reply/chunk.js";
 import type {
@@ -53,6 +52,7 @@ import { buildUntrustedChannelMetadata } from "../../security/channel-metadata.j
 import { chunkItems } from "../../utils/chunk-items.js";
 import { withTimeout } from "../../utils/with-timeout.js";
 import { loadWebMedia } from "../../web/media.js";
+import { ApplicationCommandOptionType, ButtonStyle } from "../api-types-runtime.js";
 import { chunkDiscordTextWithMode } from "../chunk.js";
 import {
   isDiscordGroupAllowedByPolicy,

@@ -1,10 +1,10 @@
 import { ChannelType, type Client } from "@buape/carbon";
-import { Routes } from "discord-api-types/v10";
 import { createReplyReferencePlanner } from "../../auto-reply/reply/reply-reference.js";
 import type { ReplyToMode } from "../../config/config.js";
 import { logVerbose } from "../../globals.js";
 import { buildAgentSessionKey } from "../../routing/resolve-route.js";
 import { truncateUtf16Safe } from "../../utils.js";
+import { Routes } from "../api-types-runtime.js";
 import type { DiscordChannelConfigResolved } from "./allow-list.js";
 import type { DiscordMessageEvent } from "./listeners.js";
 import {

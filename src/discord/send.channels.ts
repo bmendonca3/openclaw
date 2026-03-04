@@ -1,5 +1,5 @@
-import type { APIChannel } from "discord-api-types/v10";
-import { Routes } from "discord-api-types/v10";
+import type { APIChannel } from "./api-types-runtime.js";
+import { Routes } from "./api-types-runtime.js";
 import { resolveDiscordRest } from "./send.shared.js";
 import type {
   DiscordChannelCreate,

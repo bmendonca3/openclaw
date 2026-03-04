@@ -724,7 +724,7 @@ export class DiscordPresenceListener extends PresenceUpdateListener {
       setPresence(
         this.accountId,
         userId,
-        data as import("discord-api-types/v10").GatewayPresenceUpdate,
+        data as import("../api-types-runtime.js").GatewayPresenceUpdate,
       );
     } catch (err) {
       const logger = this.logger ?? discordEventQueueLog;

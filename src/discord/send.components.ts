@@ -4,11 +4,11 @@ import {
   type MessagePayloadObject,
   type RequestClient,
 } from "@buape/carbon";
-import { ChannelType, Routes } from "discord-api-types/v10";
 import { loadConfig, type OpenClawConfig } from "../config/config.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { loadWebMedia } from "../web/media.js";
 import { resolveDiscordAccount } from "./accounts.js";
+import { ChannelType, Routes } from "./api-types-runtime.js";
 import { registerDiscordComponentEntries } from "./components-registry.js";
 import {
   buildDiscordComponentMessage,
