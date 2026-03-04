@@ -267,7 +267,6 @@ export const nextcloudTalkPlugin: ChannelPlugin<ResolvedNextcloudTalkAccount> = 
         cfg: cfg as CoreConfig,
         accountId: accountId ?? undefined,
         replyTo: replyToId ?? undefined,
-        cfg: cfg as CoreConfig,
       });
       return { channel: "nextcloud-talk", ...result };
     },
@@ -277,7 +276,6 @@ export const nextcloudTalkPlugin: ChannelPlugin<ResolvedNextcloudTalkAccount> = 
         cfg: cfg as CoreConfig,
         accountId: accountId ?? undefined,
         replyTo: replyToId ?? undefined,
-        cfg: cfg as CoreConfig,
       });
       return { channel: "nextcloud-talk", ...result };
     },

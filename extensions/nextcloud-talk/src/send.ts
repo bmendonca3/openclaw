@@ -10,7 +10,6 @@ type NextcloudTalkSendOpts = {
   accountId?: string;
   replyTo?: string;
   verbose?: boolean;
-  cfg?: CoreConfig;
 };
 
 function resolveCredentials(
