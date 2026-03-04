@@ -1641,6 +1641,37 @@ describe("initSessionState internal channel routing preservation", () => {
     expect(result.sessionEntry.lastTo).toBeUndefined();
   });
 
+  it("does not reuse stale external lastTo for webchat turns on custom main keys", async () => {
+    const storePath = await createStorePath("webchat-custom-main-no-stale-lastto-");
+    const sessionKey = "agent:main:work";
+    await writeSessionStoreFast(storePath, {
+      [sessionKey]: {
+        sessionId: "sess-webchat-custom-main-1",
+        updatedAt: Date.now(),
+        lastChannel: "whatsapp",
+        lastTo: "+15555550123",
+        deliveryContext: {
+          channel: "whatsapp",
+          to: "+15555550123",
+        },
+      },
+    });
+    const cfg = { session: { store: storePath, mainKey: "work" } } as OpenClawConfig;
+
+    const result = await initSessionState({
+      ctx: {
+        Body: "webchat follow-up on custom main key",
+        SessionKey: sessionKey,
+        OriginatingChannel: "webchat",
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(result.sessionEntry.lastChannel).toBe("webchat");
+    expect(result.sessionEntry.lastTo).toBeUndefined();
+  });
+
   it("prefers webchat route over persisted external route for main session turns", async () => {
     const storePath = await createStorePath("prefer-webchat-main-route-");
     const sessionKey = "agent:main:main";

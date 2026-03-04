@@ -1,5 +1,5 @@
 import type { SessionEntry } from "../../config/sessions.js";
-import { buildAgentMainSessionKey } from "../../routing/session-key.js";
+import { buildAgentMainSessionKey, normalizeMainKey } from "../../routing/session-key.js";
 import { parseAgentSessionKey } from "../../sessions/session-key-utils.js";
 import {
   deliveryContextFromSession,
@@ -18,20 +18,28 @@ export type LegacyMainDeliveryRetirement = {
   entry: SessionEntry;
 };
 
-function resolveSessionKeyChannelHint(sessionKey?: string): string | undefined {
+function resolveSessionKeyChannelHint(sessionKey?: string, mainKey?: string): string | undefined {
   const parsed = parseAgentSessionKey(sessionKey);
   if (!parsed?.rest) {
     return undefined;
   }
+  const normalizedMainKey = normalizeMainKey(mainKey);
   const head = parsed.rest.split(":")[0]?.trim().toLowerCase();
-  if (!head || head === "main" || head === "cron" || head === "subagent" || head === "acp") {
+  if (
+    !head ||
+    head === normalizedMainKey ||
+    head === "cron" ||
+    head === "subagent" ||
+    head === "acp"
+  ) {
     return undefined;
   }
   return normalizeMessageChannel(head);
 }
 
-function isMainSessionKey(sessionKey?: string): boolean {
-  return parseAgentSessionKey(sessionKey)?.rest?.trim().toLowerCase() === "main";
+function isMainSessionKey(sessionKey?: string, mainKey?: string): boolean {
+  const normalizedMainKey = normalizeMainKey(mainKey);
+  return parseAgentSessionKey(sessionKey)?.rest?.trim().toLowerCase() === normalizedMainKey;
 }
 
 function isExternalRoutingChannel(channel?: string): channel is string {
@@ -44,13 +52,17 @@ export function resolveLastChannelRaw(params: {
   originatingChannelRaw?: string;
   persistedLastChannel?: string;
   sessionKey?: string;
+  mainKey?: string;
 }): string | undefined {
   const originatingChannel = normalizeMessageChannel(params.originatingChannelRaw);
-  if (originatingChannel === INTERNAL_MESSAGE_CHANNEL && isMainSessionKey(params.sessionKey)) {
+  if (
+    originatingChannel === INTERNAL_MESSAGE_CHANNEL &&
+    isMainSessionKey(params.sessionKey, params.mainKey)
+  ) {
     return params.originatingChannelRaw;
   }
   const persistedChannel = normalizeMessageChannel(params.persistedLastChannel);
-  const sessionKeyChannelHint = resolveSessionKeyChannelHint(params.sessionKey);
+  const sessionKeyChannelHint = resolveSessionKeyChannelHint(params.sessionKey, params.mainKey);
   let resolved = params.originatingChannelRaw || params.persistedLastChannel;
   // Internal/non-deliverable sources should not overwrite previously known
   // external delivery routes (or explicit channel hints from the session key).
@@ -71,13 +83,17 @@ export function resolveLastToRaw(params: {
   persistedLastTo?: string;
   persistedLastChannel?: string;
   sessionKey?: string;
+  mainKey?: string;
 }): string | undefined {
   const originatingChannel = normalizeMessageChannel(params.originatingChannelRaw);
-  if (originatingChannel === INTERNAL_MESSAGE_CHANNEL && isMainSessionKey(params.sessionKey)) {
+  if (
+    originatingChannel === INTERNAL_MESSAGE_CHANNEL &&
+    isMainSessionKey(params.sessionKey, params.mainKey)
+  ) {
     return params.originatingToRaw || params.toRaw;
   }
   const persistedChannel = normalizeMessageChannel(params.persistedLastChannel);
-  const sessionKeyChannelHint = resolveSessionKeyChannelHint(params.sessionKey);
+  const sessionKeyChannelHint = resolveSessionKeyChannelHint(params.sessionKey, params.mainKey);
 
   // When the turn originates from an internal/non-deliverable source, do not
   // replace an established external destination with internal routing ids
