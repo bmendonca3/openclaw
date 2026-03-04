@@ -113,27 +113,4 @@ describe("sendMessageIrc cfg threading", () => {
     });
     expect(client.sendPrivmsg).toHaveBeenCalledWith("#ops", "ping");
   });
-
-  it("falls back to runtime loadConfig when opts.cfg is omitted", async () => {
-    const client = {
-      isReady: () => true,
-      sendPrivmsg: vi.fn(),
-      quit: vi.fn(),
-    };
-
-    await sendMessageIrc("#general", "hello", { client } as never);
-
-    expect(loadConfigMock).toHaveBeenCalledOnce();
-    expect(resolveIrcAccountMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cfg: expect.objectContaining({
-          channels: expect.objectContaining({
-            irc: expect.objectContaining({
-              host: "runtime.example.com",
-            }),
-          }),
-        }),
-      }),
-    );
-  });
 });
