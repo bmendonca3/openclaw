@@ -104,4 +104,25 @@ describe("stripThinkingSignatures", () => {
       { type: "text", text: "final" },
     ]);
   });
+
+  it("removes snake_case and camelCase signature variants", () => {
+    const messages: AgentMessage[] = [
+      castAgentMessage({
+        role: "assistant",
+        content: [
+          {
+            type: "thinking",
+            thinking: "internal",
+            thinking_signature: "sig_snake",
+            thoughtSignature: "sig_camel",
+          },
+        ],
+      }),
+    ];
+
+    const result = stripThinkingSignatures(messages);
+    const assistant = result[0] as Extract<AgentMessage, { role: "assistant" }>;
+    expect(result).not.toBe(messages);
+    expect(assistant.content).toEqual([{ type: "thinking", thinking: "internal" }]);
+  });
 });
