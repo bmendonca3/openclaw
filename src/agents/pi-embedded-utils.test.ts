@@ -248,6 +248,22 @@ describe("extractAssistantText", () => {
     expect(result).toBe("BeforeAfter");
   });
 
+  it("strips leaked legacy tool_call snippets regardless of tag case", () => {
+    const msg = makeAssistantMessage({
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: 'Before<TOOL_CALL>exec tool="exec" command="ls -la /tmp" />After',
+        },
+      ],
+      timestamp: Date.now(),
+    });
+
+    const result = extractAssistantText(msg);
+    expect(result).toBe("BeforeAfter");
+  });
+
   it("strips multiple leaked legacy tool_call snippets in one text block", () => {
     const msg = makeAssistantMessage({
       role: "assistant",

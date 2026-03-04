@@ -40,7 +40,7 @@ export function stripLeakedToolCallSyntax(text: string): string {
   if (hasLegacyToolCallSnippet) {
     // Remove legacy self-closing tool call snippets that can leak into user text.
     cleaned = cleaned.replace(MARKDOWN_CODE_OR_LEGACY_TOOL_CALL_RE, (match) =>
-      match.startsWith("<tool_call") ? "" : match,
+      /^<tool_call\b/i.test(match) ? "" : match,
     );
   }
 
