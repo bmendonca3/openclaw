@@ -476,7 +476,7 @@ File contents here`,
 });
 
 describe("promoteThinkingTagsToBlocks", () => {
-  it("does not throw on malformed assistant content entries", () => {
+  it("does not throw on malformed assistant content entries and keeps normalized blocks", () => {
     const message = makeAssistantMessage({
       role: "assistant",
       content: [
@@ -487,6 +487,10 @@ describe("promoteThinkingTagsToBlocks", () => {
     });
 
     expect(() => promoteThinkingTagsToBlocks(message)).not.toThrow();
+    expect(message.content).toEqual([
+      { type: "thinking", thinking: "internal" },
+      { type: "text", text: "done" },
+    ]);
   });
 });
 

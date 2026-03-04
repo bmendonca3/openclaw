@@ -373,6 +373,8 @@ export function promoteThinkingTagsToBlocks(message: AssistantMessage): void {
   if (!changed) {
     return;
   }
+  // When we promote tagged text into structured blocks, we also normalize the
+  // message payload and drop malformed/non-object entries collected along the way.
   message.content = next;
 }
 
