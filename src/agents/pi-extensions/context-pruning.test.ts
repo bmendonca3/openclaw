@@ -256,6 +256,14 @@ describe("context-pruning", () => {
     expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
   });
 
+  it("ignores malformed text blocks in assistant messages", () => {
+    const malformedAssistant = makeAssistant("a1") as Extract<AgentMessage, { role: "assistant" }>;
+    malformedAssistant.content = [{ type: "text" }] as unknown as typeof malformedAssistant.content;
+    const messages: AgentMessage[] = [makeUser("u1"), malformedAssistant];
+
+    expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
+  });
+
   it("hard-clear removes eligible tool results before cutoff", () => {
     const messages: AgentMessage[] = [
       makeUser("u1"),
