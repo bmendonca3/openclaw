@@ -30,7 +30,7 @@ describe("noteSlackTokenHelp", () => {
     const prompter = createBasePrompter(async (message, title) => {
       notes.push({ message, title });
     });
-    const rawSpy = vi.fn(async () => {});
+    const rawSpy = vi.fn(async (_text: string) => {});
     prompter.raw = rawSpy;
 
     await noteSlackTokenHelp(prompter, "Ops Bot");
@@ -48,23 +48,18 @@ describe("noteSlackTokenHelp", () => {
     expect(parsed.features?.slash_commands?.[0]?.command).toBe("/openclaw");
   });
 
-  it("falls back to note output for non-TTY prompters", async () => {
+  it("falls back to note output when prompter raw output is unavailable", async () => {
     const notes: NoteRecord[] = [];
     const prompter = createBasePrompter(async (message, title) => {
       notes.push({ message, title });
     });
     const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-    const ttyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
-    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
 
     try {
+      // No `raw` method means onboarding must emit manifest JSON via note output.
       await noteSlackTokenHelp(prompter, "OpenClaw");
     } finally {
-      if (ttyDescriptor) {
-        Object.defineProperty(process.stdout, "isTTY", ttyDescriptor);
-      } else {
-        delete (process.stdout as { isTTY?: boolean }).isTTY;
-      }
+      writeSpy.mockRestore();
     }
 
     expect(writeSpy).not.toHaveBeenCalled();
