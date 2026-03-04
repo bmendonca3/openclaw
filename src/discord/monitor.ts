@@ -5,6 +5,7 @@ export type {
 } from "./monitor/allow-list.js";
 export {
   allowListMatches,
+  isDiscordChannelAllowlistConfigured,
   isDiscordGroupAllowedByPolicy,
   normalizeDiscordAllowList,
   normalizeDiscordSlug,

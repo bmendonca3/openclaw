@@ -55,6 +55,7 @@ import { withTimeout } from "../../utils/with-timeout.js";
 import { loadWebMedia } from "../../web/media.js";
 import { chunkDiscordTextWithMode } from "../chunk.js";
 import {
+  isDiscordChannelAllowlistConfigured,
   isDiscordGroupAllowedByPolicy,
   normalizeDiscordSlug,
   resolveDiscordChannelConfigWithFallback,
@@ -1338,8 +1339,7 @@ async function dispatchDiscordCommandInteraction(params: {
     return;
   }
   if (useAccessGroups && interaction.guild) {
-    const channelAllowlistConfigured =
-      Boolean(guildInfo?.channels) && Object.keys(guildInfo?.channels ?? {}).length > 0;
+    const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured(guildInfo?.channels);
     const channelAllowed = channelConfig?.allowed !== false;
     const { groupPolicy } = resolveOpenProviderRuntimeGroupPolicy({
       providerConfigPresent: cfg.channels?.discord !== undefined,

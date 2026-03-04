@@ -5,6 +5,7 @@ import {
   allowListMatches,
   buildDiscordMediaPayload,
   type DiscordGuildEntryResolved,
+  isDiscordChannelAllowlistConfigured,
   isDiscordGroupAllowedByPolicy,
   normalizeDiscordAllowList,
   normalizeDiscordSlug,
@@ -607,6 +608,36 @@ describe("discord groupPolicy gating", () => {
     for (const testCase of cases) {
       expect(isDiscordGroupAllowedByPolicy(testCase.input), testCase.name).toBe(testCase.expected);
     }
+  });
+
+  it("keeps guild open when channel entries only add prompts", () => {
+    const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured({
+      coder: { systemPrompt: "Use short answers." },
+    });
+    expect(channelAllowlistConfigured).toBe(false);
+    expect(
+      isDiscordGroupAllowedByPolicy({
+        groupPolicy: "allowlist",
+        guildAllowlisted: true,
+        channelAllowlistConfigured,
+        channelAllowed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats explicit allow flags as channel allowlist entries", () => {
+    const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured({
+      coder: { allow: true },
+    });
+    expect(channelAllowlistConfigured).toBe(true);
+    expect(
+      isDiscordGroupAllowedByPolicy({
+        groupPolicy: "allowlist",
+        guildAllowlisted: true,
+        channelAllowlistConfigured,
+        channelAllowed: false,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -30,6 +30,7 @@ import { DEFAULT_ACCOUNT_ID, resolveAgentIdFromSessionKey } from "../../routing/
 import { fetchPluralKitMessageInfo } from "../pluralkit.js";
 import { sendMessageDiscord } from "../send.js";
 import {
+  isDiscordChannelAllowlistConfigured,
   isDiscordGroupAllowedByPolicy,
   normalizeDiscordSlug,
   resolveDiscordChannelConfigWithFallback,
@@ -488,8 +489,7 @@ export async function preflightDiscordMessage(
     return null;
   }
 
-  const channelAllowlistConfigured =
-    Boolean(guildInfo?.channels) && Object.keys(guildInfo?.channels ?? {}).length > 0;
+  const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured(guildInfo?.channels);
   const channelAllowed = channelConfig?.allowed !== false;
   if (
     isGuildMessage &&
