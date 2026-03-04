@@ -126,7 +126,7 @@ describe("nodes run prepare fallback (#29171)", () => {
       .filter((entry) => entry.method === "node.invoke")
       .map((entry) => entry.params?.command);
 
-    expect(invokeCommands).toEqual(["system.run"]);
+    expect(invokeCommands).toEqual(["system.run.prepare", "system.run"]);
   });
 
   it("requests approval without systemRunPlanV2 when it falls back to system.run", async () => {
@@ -153,7 +153,7 @@ describe("nodes run prepare fallback (#29171)", () => {
 
     const invokeRequest = callGateway.mock.calls
       .map((call) => call[0])
-      .find((entry) => entry.method === "node.invoke");
+      .find((entry) => entry.method === "node.invoke" && entry.params?.command === "system.run");
 
     expect(invokeRequest?.params?.params).toMatchObject({
       command: ["echo", "hi"],

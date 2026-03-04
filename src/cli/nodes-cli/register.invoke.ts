@@ -235,16 +235,7 @@ async function prepareNodesRunContext(params: {
     });
 
   const advertisedCommands = Array.isArray(nodeInfo?.commands) ? nodeInfo.commands : null;
-  const advertisedSupportsPrepare = advertisedCommands?.includes("system.run.prepare") ?? false;
   const advertisedSupportsRun = advertisedCommands?.includes("system.run") ?? false;
-  if (advertisedCommands && !advertisedSupportsPrepare && advertisedSupportsRun) {
-    return {
-      prepared: fallbackPrepared(),
-      nodeEnv,
-      timeoutMs,
-      invokeTimeout,
-    };
-  }
 
   try {
     const prepareResponse = (await callGatewayCli("node.invoke", params.opts, {
