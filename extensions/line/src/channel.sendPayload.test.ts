@@ -136,8 +136,8 @@ describe("linePlugin outbound.sendPayload", () => {
     expect(mocks.pushFlexMessage).toHaveBeenCalledTimes(1);
     expect(mocks.pushMessageLine).toHaveBeenCalledWith("line:group:1", "Now playing:", {
       verbose: false,
-      cfg,
       accountId: "default",
+      cfg,
     });
   });
 
@@ -174,8 +174,8 @@ describe("linePlugin outbound.sendPayload", () => {
     expect(mocks.pushTemplateMessage).toHaveBeenCalledTimes(1);
     expect(mocks.pushMessageLine).toHaveBeenCalledWith("line:user:1", "Choose one:", {
       verbose: false,
-      cfg,
       accountId: "default",
+      cfg,
     });
   });
 
@@ -246,8 +246,8 @@ describe("linePlugin outbound.sendPayload", () => {
     expect(mocks.sendMessageLine).toHaveBeenCalledWith("line:user:3", "", {
       verbose: false,
       mediaUrl: "https://example.com/img.jpg",
-      cfg,
       accountId: "default",
+      cfg,
     });
     expect(mocks.pushTextMessageWithQuickReplies).toHaveBeenCalledWith(
       "line:user:3",
