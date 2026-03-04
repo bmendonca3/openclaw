@@ -17,6 +17,7 @@ import {
   resolveDiscordShouldRequireMention,
   resolveGroupDmAllow,
   sanitizeDiscordThreadName,
+  shouldDenyDiscordChannelByAllowFlag,
   shouldEmitDiscordReactionNotification,
 } from "./monitor.js";
 import { DiscordMessageListener, DiscordReactionListener } from "./monitor/listeners.js";
@@ -638,6 +639,28 @@ describe("discord groupPolicy gating", () => {
         channelAllowed: false,
       }),
     ).toBe(false);
+  });
+
+  it("does not deny fallback channels when access groups are enabled without explicit allow flags", () => {
+    expect(
+      shouldDenyDiscordChannelByAllowFlag({
+        isGuildMessage: true,
+        channelAllowed: false,
+        useAccessGroups: true,
+        channelAllowlistConfigured: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("denies fallback channels when explicit allow flags are configured", () => {
+    expect(
+      shouldDenyDiscordChannelByAllowFlag({
+        isGuildMessage: true,
+        channelAllowed: false,
+        useAccessGroups: true,
+        channelAllowlistConfigured: true,
+      }),
+    ).toBe(true);
   });
 });
 

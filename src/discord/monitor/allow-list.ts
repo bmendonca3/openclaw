@@ -541,6 +541,21 @@ export function isDiscordGroupAllowedByPolicy(params: {
   return channelAllowed;
 }
 
+export function shouldDenyDiscordChannelByAllowFlag(params: {
+  isGuildMessage: boolean;
+  channelAllowed: boolean;
+  useAccessGroups: boolean;
+  channelAllowlistConfigured: boolean;
+}): boolean {
+  if (!params.isGuildMessage || params.channelAllowed) {
+    return false;
+  }
+  if (!params.useAccessGroups) {
+    return true;
+  }
+  return params.channelAllowlistConfigured;
+}
+
 export function resolveGroupDmAllow(params: {
   channels?: string[];
   channelId: string;

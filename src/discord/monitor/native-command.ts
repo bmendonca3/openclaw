@@ -63,6 +63,7 @@ import {
   resolveDiscordMemberAccessState,
   resolveDiscordOwnerAccess,
   resolveDiscordOwnerAllowFrom,
+  shouldDenyDiscordChannelByAllowFlag,
 } from "./allow-list.js";
 import { resolveDiscordDmCommandAccess } from "./dm-command-auth.js";
 import { handleDiscordDmCommandDecision } from "./dm-command-decision.js";
@@ -1334,12 +1335,19 @@ async function dispatchDiscordCommandInteraction(params: {
     await respond("This channel is disabled.");
     return;
   }
-  if (interaction.guild && channelConfig?.allowed === false) {
+  const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured(guildInfo?.channels);
+  if (
+    shouldDenyDiscordChannelByAllowFlag({
+      isGuildMessage: Boolean(interaction.guild),
+      channelAllowed: channelConfig?.allowed !== false,
+      useAccessGroups,
+      channelAllowlistConfigured,
+    })
+  ) {
     await respond("This channel is not allowed.");
     return;
   }
   if (useAccessGroups && interaction.guild) {
-    const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured(guildInfo?.channels);
     const channelAllowed = channelConfig?.allowed !== false;
     const { groupPolicy } = resolveOpenProviderRuntimeGroupPolicy({
       providerConfigPresent: cfg.channels?.discord !== undefined,
