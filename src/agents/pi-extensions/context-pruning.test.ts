@@ -264,6 +264,26 @@ describe("context-pruning", () => {
     expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
   });
 
+  it("ignores malformed text blocks in user messages", () => {
+    const malformedUser = makeUser("u1") as Extract<AgentMessage, { role: "user" }>;
+    malformedUser.content = [{ type: "text" }] as unknown as typeof malformedUser.content;
+    const messages: AgentMessage[] = [malformedUser, makeAssistant("a1")];
+
+    expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
+  });
+
+  it("ignores malformed text blocks in tool results", () => {
+    const malformedTool = makeToolResult({
+      toolCallId: "t1",
+      toolName: "exec",
+      text: "ok",
+    });
+    malformedTool.content = [{ type: "text" }] as unknown as typeof malformedTool.content;
+    const messages: AgentMessage[] = [makeUser("u1"), makeAssistant("a1"), malformedTool];
+
+    expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
+  });
+
   it("hard-clear removes eligible tool results before cutoff", () => {
     const messages: AgentMessage[] = [
       makeUser("u1"),
