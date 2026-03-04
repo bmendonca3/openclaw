@@ -455,16 +455,13 @@ function resolveAnnounceOrigin(
   const normalizedRequester = normalizeDeliveryContext(requesterOrigin);
   const normalizedEntry = deliveryContextFromSession(entry);
   if (normalizedRequester?.channel && isInternalMessageChannel(normalizedRequester.channel)) {
-    // Ignore internal channel hints (webchat) so a valid persisted route
-    // can still be used for outbound delivery. Non-standard channels that
-    // are not in the deliverable list should NOT be stripped here — doing
-    // so causes the session entry's stale lastChannel (often WhatsApp) to
-    // override the actual requester origin, leading to delivery failures.
+    // Keep explicit internal requester targets so stale persisted routes
+    // do not hijack completion announcements in shared sessions.
+    if (normalizedRequester.to) {
+      return mergeDeliveryContext(normalizedRequester, normalizedEntry);
+    }
     return mergeDeliveryContext(
-      {
-        accountId: normalizedRequester.accountId,
-        threadId: normalizedRequester.threadId,
-      },
+      { accountId: normalizedRequester.accountId, threadId: normalizedRequester.threadId },
       normalizedEntry,
     );
   }

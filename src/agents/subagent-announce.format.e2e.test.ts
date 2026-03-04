@@ -1937,6 +1937,37 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.to).toBe("telegram:123");
   });
 
+  it("does not fall back to stale external channel when requester origin is webchat", async () => {
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "session-stale-channel",
+        channel: "telegram",
+        to: "telegram:999",
+        lastChannel: "telegram",
+        lastTo: "telegram:999",
+      },
+    };
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-webchat-origin",
+      requesterSessionKey: "main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "webchat", to: "conversation:webchat-main" },
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      spawnMode: "session",
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    expect(call?.params?.deliver).toBe(false);
+    expect(call?.params?.channel).toBeUndefined();
+    expect(call?.params?.to).toBeUndefined();
+  });
+
   it("routes or falls back for ended parent subagent sessions (#18037)", async () => {
     const cases = [
       {
