@@ -16,6 +16,7 @@ type SessionActionContext = {
   chatLog: ChatLog;
   tui: TUI;
   opts: TuiOptions;
+  heartbeatAckMaxChars?: number | string;
   state: TuiStateAccess;
   agentNames: Map<string, string>;
   initialSessionInput: string;
@@ -52,12 +53,15 @@ function isHeartbeatPollHistoryText(text: string): boolean {
   );
 }
 
-function isHeartbeatAckOnlyHistoryText(text: string): boolean {
-  const stripped = stripHeartbeatToken(text, { mode: "heartbeat" });
+function isHeartbeatAckOnlyHistoryText(text: string, maxAckChars?: number | string): boolean {
+  const stripped = stripHeartbeatToken(text, { mode: "heartbeat", maxAckChars });
   return stripped.didStrip && stripped.shouldSkip;
 }
 
-function shouldSuppressHistoryMessage(message: Record<string, unknown>): boolean {
+function shouldSuppressHistoryMessage(
+  message: Record<string, unknown>,
+  heartbeatAckMaxChars?: number | string,
+): boolean {
   const role = message.role;
   if (role !== "user" && role !== "assistant") {
     return false;
@@ -69,7 +73,7 @@ function shouldSuppressHistoryMessage(message: Record<string, unknown>): boolean
   if (isHeartbeatPollHistoryText(text)) {
     return true;
   }
-  return role === "assistant" && isHeartbeatAckOnlyHistoryText(text);
+  return role === "assistant" && isHeartbeatAckOnlyHistoryText(text, heartbeatAckMaxChars);
 }
 
 export function createSessionActions(context: SessionActionContext) {
@@ -78,6 +82,7 @@ export function createSessionActions(context: SessionActionContext) {
     chatLog,
     tui,
     opts,
+    heartbeatAckMaxChars,
     state,
     agentNames,
     initialSessionInput,
@@ -338,7 +343,7 @@ export function createSessionActions(context: SessionActionContext) {
           continue;
         }
         const message = entry as Record<string, unknown>;
-        if (shouldSuppressHistoryMessage(message)) {
+        if (shouldSuppressHistoryMessage(message, heartbeatAckMaxChars)) {
           continue;
         }
         if (isCommandMessage(message)) {
