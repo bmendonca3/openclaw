@@ -11,6 +11,7 @@ const BINARY_LINE_REPLACEMENT_THRESHOLD = 12;
 const URL_PREFIX_RE = /^(https?:\/\/|file:\/\/)/i;
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
 const FILE_LIKE_RE = /^[a-zA-Z0-9._-]+$/;
+const HEX_BODY_RE = /^[a-fA-F0-9]+$/;
 const RTL_SCRIPT_RE = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
 const BIDI_CONTROL_RE = /[\u202a-\u202e\u2066-\u2069]/;
 const RTL_ISOLATE_START = "\u2067";
@@ -71,6 +72,10 @@ function isCopySensitiveToken(token: string): boolean {
     return true;
   }
   if (token.includes("/") || token.includes("\\")) {
+    return true;
+  }
+  const normalizedHex = token.startsWith("0x") || token.startsWith("0X") ? token.slice(2) : token;
+  if (normalizedHex.length >= 33 && HEX_BODY_RE.test(normalizedHex) && /\d/.test(normalizedHex)) {
     return true;
   }
   return token.includes("_") && FILE_LIKE_RE.test(token);
