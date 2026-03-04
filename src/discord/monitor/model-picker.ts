@@ -15,8 +15,11 @@ import {
   type ModelsProviderData,
 } from "../../auto-reply/reply/commands-models.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import type { APISelectMenuOption } from "../api-types-runtime.js";
-import { ButtonStyle } from "../api-types-runtime.js";
+import {
+  ButtonStyle,
+  type APISelectMenuOption,
+  type DiscordButtonStyle,
+} from "../api-types-runtime.js";
 
 export const DISCORD_MODEL_PICKER_CUSTOM_ID_KEY = "mdlpk";
 export const DISCORD_CUSTOM_ID_MAX_CHARS = 100;
@@ -35,7 +38,6 @@ export const DISCORD_MODEL_PICKER_PROVIDER_SINGLE_PAGE_MAX =
 export const DISCORD_MODEL_PICKER_MODEL_PAGE_SIZE = DISCORD_COMPONENT_MAX_SELECT_OPTIONS;
 
 const DISCORD_PROVIDER_BUTTON_LABEL_MAX_CHARS = 18;
-type DiscordButtonStyle = (typeof ButtonStyle)[keyof typeof ButtonStyle];
 
 const COMMAND_CONTEXTS = ["model", "models"] as const;
 const PICKER_ACTIONS = [

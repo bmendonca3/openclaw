@@ -29,13 +29,12 @@ import {
   GATEWAY_CLIENT_NAMES,
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
-import { ButtonStyle, Routes } from "../api-types-runtime.js";
+import { ButtonStyle, Routes, type DiscordButtonStyle } from "../api-types-runtime.js";
 import { createDiscordClient, stripUndefinedFields } from "../send.shared.js";
 import { DiscordUiContainer } from "../ui.js";
 
 const EXEC_APPROVAL_KEY = "execapproval";
 export type { ExecApprovalRequest, ExecApprovalResolved };
-type DiscordButtonStyle = (typeof ButtonStyle)[keyof typeof ButtonStyle];
 
 /** Extract Discord channel ID from a session key like "agent:main:discord:channel:123456789" */
 export function extractDiscordChannelId(sessionKey?: string | null): string | null {

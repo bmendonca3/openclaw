@@ -13,6 +13,7 @@ export const PermissionFlagsBits = discordApiV10.PermissionFlagsBits;
 export const Routes = discordApiV10.Routes;
 export const StickerFormatType = discordApiV10.StickerFormatType;
 export const TextInputStyle = discordApiV10.TextInputStyle;
+export type DiscordButtonStyle = (typeof ButtonStyle)[keyof typeof ButtonStyle];
 
 // Type-only re-export so existing imports can keep using a single module path.
 export type * from "discord-api-types/v10";
