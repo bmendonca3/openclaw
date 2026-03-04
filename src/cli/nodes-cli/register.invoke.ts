@@ -181,10 +181,7 @@ function isUnsupportedNodeCommandError(error: unknown, command: string): boolean
   if (normalized.includes("did not declare any supported commands")) {
     return true;
   }
-  return (
-    normalized.includes(command.toLowerCase()) &&
-    (normalized.includes("does not support") || normalized.includes("not in the allowlist"))
-  );
+  return normalized.includes(command.toLowerCase()) && normalized.includes("does not support");
 }
 
 function resolveNodesRunPolicy(opts: NodesRunOpts, execDefaults: ExecDefaults | undefined) {

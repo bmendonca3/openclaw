@@ -109,7 +109,7 @@ describe("nodes run prepare fallback (#29171)", () => {
       commands: ["system.run"],
       connected: true,
       permissions: { screenRecording: true },
-    };
+    } as (typeof nodeListResponse.nodes)[number];
   });
 
   it("falls back to system.run when the node does not advertise system.run.prepare", async () => {
@@ -275,6 +275,33 @@ describe("nodes run prepare fallback (#29171)", () => {
 
   it("does not fallback when generic unsupported-command errors omit the command", async () => {
     prepareErrorMessage = "command not supported";
+    nodeListResponse.nodes[0] = {
+      nodeId: "mac-1",
+      displayName: "Mac",
+      platform: "macos",
+      caps: [],
+      connected: true,
+      permissions: { screenRecording: true },
+    } as (typeof nodeListResponse.nodes)[number];
+
+    const program = new Command();
+    program.exitOverride();
+    registerNodesCli(program);
+
+    await program.parseAsync(["nodes", "run", "--node", "mac-1", "echo", "hi"], {
+      from: "user",
+    });
+
+    const invokeCommands = callGateway.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => entry.method === "node.invoke")
+      .map((entry) => entry.params?.command);
+
+    expect(invokeCommands).toEqual(["system.run.prepare"]);
+  });
+
+  it("does not fallback when system.run.prepare is denied by allowlist policy", async () => {
+    prepareErrorMessage = 'node command not allowed: "system.run.prepare" is not in the allowlist';
     nodeListResponse.nodes[0] = {
       nodeId: "mac-1",
       displayName: "Mac",
