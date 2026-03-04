@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { HEARTBEAT_PROMPT } from "../auto-reply/heartbeat.js";
 import type { GatewayChatClient } from "./gateway-chat.js";
 import { createSessionActions } from "./tui-session-actions.js";
 import type { TuiStateAccess } from "./tui-types.js";
@@ -127,8 +128,7 @@ describe("tui session actions", () => {
       messages: [
         {
           role: "user",
-          content:
-            "<relevant-memories>\nRead HEARTBEAT.md if it exists (workspace context). Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.",
+          content: `<relevant-memories>\n${HEARTBEAT_PROMPT}`,
         },
         {
           role: "assistant",

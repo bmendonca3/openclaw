@@ -1,5 +1,5 @@
 import type { TUI } from "@mariozechner/pi-tui";
-import { stripHeartbeatToken } from "../auto-reply/heartbeat.js";
+import { HEARTBEAT_PROMPT, stripHeartbeatToken } from "../auto-reply/heartbeat.js";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import {
   normalizeAgentId,
@@ -44,9 +44,10 @@ function isHeartbeatPollHistoryText(text: string): boolean {
   if (!lower) {
     return false;
   }
+  const heartbeatPrompt = HEARTBEAT_PROMPT.toLowerCase();
   return (
     lower.includes("<relevant-memories>") ||
-    lower.includes("read heartbeat.md if it exists (workspace context). follow it strictly.") ||
+    lower.includes(heartbeatPrompt) ||
     lower.includes("heartbeat poll:")
   );
 }
