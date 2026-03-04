@@ -11,7 +11,7 @@ const BINARY_LINE_REPLACEMENT_THRESHOLD = 12;
 const URL_PREFIX_RE = /^(https?:\/\/|file:\/\/)/i;
 const WINDOWS_DRIVE_RE = /^[a-zA-Z]:[\\/]/;
 const FILE_LIKE_RE = /^[a-zA-Z0-9._-]+$/;
-const LONG_HEX_TOKEN_RE = /^(?!([a-f0-9])\1+$)(?=.*[a-f])[a-f0-9]{33,}$/i;
+const LONG_HEX_TOKEN_RE = /^(?!([a-f0-9])\1+$)[a-f0-9]{33,}$/i;
 const RTL_SCRIPT_RE = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
 const BIDI_CONTROL_RE = /[\u202a-\u202e\u2066-\u2069]/;
 const RTL_ISOLATE_START = "\u2067";
