@@ -124,7 +124,7 @@ function estimateMessageChars(message: AgentMessage): number {
       if (b.type === "text") {
         chars += b.text.length;
       }
-      if (b.type === "thinking") {
+      if (b.type === "thinking" && typeof b.thinking === "string") {
         chars += b.thinking.length;
       }
       if (b.type === "toolCall") {

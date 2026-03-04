@@ -246,6 +246,16 @@ describe("context-pruning", () => {
     expect(toolText(findToolResult(next, "t1"))).toBe("[cleared]");
   });
 
+  it("ignores malformed thinking blocks in assistant messages", () => {
+    const malformedAssistant = makeAssistant("a1") as Extract<AgentMessage, { role: "assistant" }>;
+    malformedAssistant.content = [
+      { type: "thinking" },
+    ] as unknown as typeof malformedAssistant.content;
+    const messages: AgentMessage[] = [makeUser("u1"), malformedAssistant];
+
+    expect(() => pruneWithAggressiveDefaults(messages)).not.toThrow();
+  });
+
   it("hard-clear removes eligible tool results before cutoff", () => {
     const messages: AgentMessage[] = [
       makeUser("u1"),
