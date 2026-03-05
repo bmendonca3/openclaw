@@ -515,6 +515,7 @@ export function attachGatewayWsMessageHandler(params: {
         const isWebchat = isWebchatConnect(connectParams);
         const isLocalClient =
           isStrictLocalClient || (isProxyTailscaleServeShortcutOnly && (isControlUi || isWebchat));
+        const isPrivilegedLocalClient = isStrictLocalClient;
         if (enforceOriginCheckForAnyClient || isControlUi || isWebchat) {
           const hostHeaderOriginFallbackEnabled =
             configSnapshot.gateway?.controlUi?.dangerouslyAllowHostHeaderOriginFallback === true;
@@ -523,7 +524,7 @@ export function attachGatewayWsMessageHandler(params: {
             origin: requestOrigin,
             allowedOrigins: configSnapshot.gateway?.controlUi?.allowedOrigins,
             allowHostHeaderOriginFallback: hostHeaderOriginFallbackEnabled,
-            isLocalClient,
+            isLocalClient: isPrivilegedLocalClient,
           });
           if (!originCheck.ok) {
             const errorMessage =
@@ -775,7 +776,7 @@ export function attachGatewayWsMessageHandler(params: {
         const skipPairing =
           shouldSkipBackendSelfPairing({
             connectParams,
-            isLocalClient,
+            isLocalClient: isPrivilegedLocalClient,
             hasBrowserOriginHeader,
             sharedAuthOk,
             authMethod,
@@ -828,7 +829,7 @@ export function attachGatewayWsMessageHandler(params: {
             reason: "not-paired" | "role-upgrade" | "scope-upgrade" | "metadata-upgrade",
           ) => {
             const allowSilentLocalPairing = shouldAllowSilentLocalPairing({
-              isLocalClient,
+              isLocalClient: isPrivilegedLocalClient,
               hasBrowserOriginHeader,
               isControlUi,
               isWebchat,
@@ -1017,7 +1018,7 @@ export function attachGatewayWsMessageHandler(params: {
         if (presenceKey) {
           upsertPresence(presenceKey, {
             host: connectParams.client.displayName ?? connectParams.client.id ?? os.hostname(),
-            ip: isLocalClient ? undefined : reportedClientIp,
+            ip: isPrivilegedLocalClient ? undefined : reportedClientIp,
             version: connectParams.client.version,
             platform: connectParams.client.platform,
             deviceFamily: connectParams.client.deviceFamily,
