@@ -1124,6 +1124,23 @@ describe("loadOpenClawPlugins", () => {
     expect(resolved).toBe(srcFile);
   });
 
+  it("falls back to src plugin-sdk alias when running from src in production and dist alias is missing", () => {
+    const { root, srcFile, distFile } = createPluginSdkAliasFixture({
+      srcFile: "telegram.ts",
+      distFile: "telegram.js",
+    });
+    fs.rmSync(distFile);
+
+    const resolved = withEnv({ NODE_ENV: "production" }, () =>
+      __testing.resolvePluginSdkAliasFile({
+        srcFile: "telegram.ts",
+        distFile: "telegram.js",
+        modulePath: path.join(root, "src", "plugins", "loader.ts"),
+      }),
+    );
+    expect(resolved).toBe(srcFile);
+  });
+
   it("prefers dist root-alias shim when loader runs from dist", () => {
     const { root, distFile } = createPluginSdkAliasFixture({
       srcFile: "root-alias.cjs",

@@ -57,6 +57,7 @@ const resolvePluginSdkAliasFile = (params: {
     const isTest = process.env.VITEST || process.env.NODE_ENV === "test";
     const normalizedModulePath = modulePath.replace(/\\/g, "/");
     const isDistRuntime = normalizedModulePath.includes("/dist/");
+    const isSrcRuntime = normalizedModulePath.includes("/src/");
     let cursor = path.dirname(modulePath);
     for (let i = 0; i < 6; i += 1) {
       const srcCandidate = path.join(cursor, "src", "plugin-sdk", params.srcFile);
@@ -64,7 +65,7 @@ const resolvePluginSdkAliasFile = (params: {
       const orderedCandidates = isDistRuntime
         ? [distCandidate, srcCandidate]
         : isProduction
-          ? isTest
+          ? isTest || isSrcRuntime
             ? [distCandidate, srcCandidate]
             : [distCandidate]
           : [srcCandidate, distCandidate];
