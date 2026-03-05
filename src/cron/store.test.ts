@@ -97,6 +97,23 @@ describe("cron store", () => {
     expect(await getModeBits(store.storePath)).toBe(0o600);
     expect(await getModeBits(`${store.storePath}.bak`)).toBe(0o600);
   });
+
+  it.skipIf(!isPosix)("rejects symlinked backup path", async () => {
+    const store = await makeStorePath();
+    const first = makeStore("job-1", true);
+    const second = makeStore("job-2", false);
+    const symlinkTarget = path.join(path.dirname(store.storePath), "leak.txt");
+
+    await saveCronStore(store.storePath, first);
+    await fs.writeFile(symlinkTarget, "leak", "utf-8");
+    await fs.symlink(symlinkTarget, `${store.storePath}.bak`);
+
+    await saveCronStore(store.storePath, second);
+
+    expect(await fs.readFile(symlinkTarget, "utf-8")).toBe("leak");
+    expect((await fs.lstat(`${store.storePath}.bak`)).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(await fs.readFile(store.storePath, "utf-8"))).toEqual(second);
+  });
 });
 
 describe("saveCronStore", () => {

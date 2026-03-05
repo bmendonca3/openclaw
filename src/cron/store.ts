@@ -14,11 +14,51 @@ const CRON_FILE_MODE = 0o600;
 
 async function ensureCronDir(dirPath: string) {
   await fs.promises.mkdir(dirPath, { recursive: true, mode: CRON_DIR_MODE });
-  await fs.promises.chmod(dirPath, CRON_DIR_MODE).catch(() => undefined);
+  const stat = await fs.promises.lstat(dirPath);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error(`cron dir must be a real directory: ${dirPath}`);
+  }
+  await ensureCronFileMode(dirPath, CRON_DIR_MODE);
 }
 
-async function ensureCronFileMode(filePath: string) {
-  await fs.promises.chmod(filePath, CRON_FILE_MODE).catch(() => undefined);
+async function ensureCronFileMode(filePath: string, mode = CRON_FILE_MODE) {
+  try {
+    await fs.promises.chmod(filePath, mode);
+    return;
+  } catch (err) {
+    if (process.platform !== "win32") {
+      const stat = await fs.promises.stat(filePath).catch(() => null);
+      if (stat && (stat.mode & 0o077) !== 0) {
+        throw err;
+      }
+    }
+  }
+}
+
+async function assertNotSymlink(filePath: string) {
+  const stat = await fs.promises.lstat(filePath).catch((err: unknown) => {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw err;
+  });
+  if (stat?.isSymbolicLink()) {
+    throw new Error(`refusing to use symlink for cron file: ${filePath}`);
+  }
+}
+
+async function writeCronFile(filePath: string, contents: string) {
+  await assertNotSymlink(filePath);
+  const tmp = `${filePath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  await fs.promises.writeFile(tmp, contents, { encoding: "utf-8", mode: CRON_FILE_MODE });
+  await fs.promises.rename(tmp, filePath);
+}
+
+async function copyCronFile(sourcePath: string, destPath: string) {
+  const contents = await fs.promises.readFile(sourcePath, "utf-8");
+  await assertNotSymlink(destPath);
+  await fs.promises.writeFile(destPath, contents, { encoding: "utf-8", mode: CRON_FILE_MODE });
+  await ensureCronFileMode(destPath);
 }
 
 export function resolveCronStorePath(storePath?: string) {
@@ -93,28 +133,27 @@ export async function saveCronStore(
     serializedStoreCache.set(storePath, json);
     return;
   }
-  const tmp = `${storePath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
-  await fs.promises.writeFile(tmp, json, { encoding: "utf-8", mode: CRON_FILE_MODE });
   if (previous !== null && !opts?.skipBackup) {
     try {
-      await fs.promises.copyFile(storePath, `${storePath}.bak`);
-      await ensureCronFileMode(`${storePath}.bak`);
+      await writeCronFile(`${storePath}.bak`, previous);
     } catch {
       // best-effort
     }
   }
-  await renameWithRetry(tmp, storePath);
-  await ensureCronFileMode(storePath);
+  await writeCronFileWithRetry(storePath, json);
   serializedStoreCache.set(storePath, json);
 }
 
 const RENAME_MAX_RETRIES = 3;
 const RENAME_BASE_DELAY_MS = 50;
 
-async function renameWithRetry(src: string, dest: string): Promise<void> {
+async function writeCronFileWithRetry(dest: string, contents: string): Promise<void> {
+  const tmp = `${dest}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  await fs.promises.writeFile(tmp, contents, { encoding: "utf-8", mode: CRON_FILE_MODE });
   for (let attempt = 0; attempt <= RENAME_MAX_RETRIES; attempt++) {
     try {
-      await fs.promises.rename(src, dest);
+      await assertNotSymlink(dest);
+      await fs.promises.rename(tmp, dest);
       return;
     } catch (err) {
       const code = (err as { code?: string }).code;
@@ -124,9 +163,9 @@ async function renameWithRetry(src: string, dest: string): Promise<void> {
       }
       // Windows doesn't reliably support atomic replace via rename when dest exists.
       if (code === "EPERM" || code === "EEXIST") {
-        await fs.promises.copyFile(src, dest);
-        await ensureCronFileMode(dest);
-        await fs.promises.unlink(src).catch(() => {});
+        await assertNotSymlink(dest);
+        await copyCronFile(tmp, dest);
+        await fs.promises.unlink(tmp).catch(() => {});
         return;
       }
       throw err;

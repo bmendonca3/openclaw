@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parseByteSize } from "../cli/parse-bytes.js";
@@ -55,11 +56,67 @@ const CRON_RUN_LOG_FILE_MODE = 0o600;
 
 async function ensureCronRunsDir(dirPath: string) {
   await fs.mkdir(dirPath, { recursive: true, mode: CRON_RUNS_DIR_MODE });
-  await fs.chmod(dirPath, CRON_RUNS_DIR_MODE).catch(() => undefined);
+  const stat = await fs.lstat(dirPath);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error(`cron runs dir must be a real directory: ${dirPath}`);
+  }
+  await ensurePrivateMode(dirPath, CRON_RUNS_DIR_MODE);
 }
 
 async function ensureCronRunLogFileMode(filePath: string) {
-  await fs.chmod(filePath, CRON_RUN_LOG_FILE_MODE).catch(() => undefined);
+  await ensurePrivateMode(filePath, CRON_RUN_LOG_FILE_MODE);
+}
+
+async function ensurePrivateMode(filePath: string, mode: number) {
+  try {
+    await fs.chmod(filePath, mode);
+    return;
+  } catch (err) {
+    if (process.platform !== "win32") {
+      const stat = await fs.stat(filePath).catch(() => null);
+      if (stat && (stat.mode & 0o077) !== 0) {
+        throw err;
+      }
+    }
+  }
+}
+
+async function assertNotSymlink(filePath: string) {
+  const stat = await fs.lstat(filePath).catch((err: unknown) => {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw err;
+  });
+  if (stat?.isSymbolicLink()) {
+    throw new Error(`refusing to use symlink for cron run log: ${filePath}`);
+  }
+}
+
+async function appendCronRunLogEntry(filePath: string, entry: CronRunLogEntry) {
+  await assertNotSymlink(filePath);
+  const flags =
+    process.platform === "win32"
+      ? fsConstants.O_APPEND | fsConstants.O_CREAT | fsConstants.O_WRONLY
+      : fsConstants.O_APPEND | fsConstants.O_CREAT | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW;
+  const handle = await fs.open(filePath, flags, CRON_RUN_LOG_FILE_MODE);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) {
+      throw new Error(`cron run log must be a regular file: ${filePath}`);
+    }
+    await handle.appendFile(`${JSON.stringify(entry)}\n`, "utf-8");
+    await handle.chmod(CRON_RUN_LOG_FILE_MODE).catch(async (err) => {
+      if (process.platform !== "win32") {
+        const nextStat = await handle.stat().catch(() => null);
+        if (nextStat && (nextStat.mode & 0o077) !== 0) {
+          throw err;
+        }
+      }
+    });
+  } finally {
+    await handle.close();
+  }
 }
 
 function assertSafeCronRunLogJobId(jobId: string): string {
@@ -156,8 +213,7 @@ export async function appendCronRunLog(
     .catch(() => undefined)
     .then(async () => {
       await ensureCronRunsDir(path.dirname(resolved));
-      await fs.appendFile(resolved, `${JSON.stringify(entry)}\n`, "utf-8");
-      await ensureCronRunLogFileMode(resolved);
+      await appendCronRunLogEntry(resolved, entry);
       await pruneIfNeeded(resolved, {
         maxBytes: opts?.maxBytes ?? DEFAULT_CRON_RUN_LOG_MAX_BYTES,
         keepLines: opts?.keepLines ?? DEFAULT_CRON_RUN_LOG_KEEP_LINES,

@@ -113,6 +113,26 @@ describe("cron run log", () => {
     });
   });
 
+  it.skipIf(!isPosix)("rejects symlinked run-log paths", async () => {
+    await withRunLogDir("openclaw-cron-log-symlink-", async (dir) => {
+      const runsDir = path.join(dir, "runs");
+      const targetPath = path.join(dir, "target.jsonl");
+      const logPath = path.join(runsDir, "job-1.jsonl");
+      await fs.mkdir(runsDir, { recursive: true });
+      await fs.writeFile(targetPath, "", "utf-8");
+      await fs.symlink(targetPath, logPath);
+
+      await expect(
+        appendCronRunLog(logPath, {
+          ts: 1,
+          jobId: "job-1",
+          action: "finished",
+          status: "ok",
+        }),
+      ).rejects.toThrow(/symlink/i);
+    });
+  });
+
   it("reads newest entries and filters by jobId", async () => {
     await withRunLogDir("openclaw-cron-log-read-", async (dir) => {
       const logPathA = path.join(dir, "runs", "a.jsonl");
