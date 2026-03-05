@@ -417,6 +417,7 @@ export function wrapToolWorkspaceRootGuardWithOptions(
     ...tool,
     execute: async (toolCallId, args, signal, onUpdate) => {
       const normalized = normalizeToolParams(args);
+      let argsForExecute = normalized ?? args;
       const record =
         normalized ??
         (args && typeof args === "object" ? (args as Record<string, unknown>) : undefined);
@@ -428,8 +429,11 @@ export function wrapToolWorkspaceRootGuardWithOptions(
           containerWorkdir: options?.containerWorkdir,
         });
         await assertSandboxPath({ filePath: sandboxPath, cwd: root, root });
+        if (sandboxPath !== filePath && record && typeof record === "object") {
+          argsForExecute = { ...record, path: sandboxPath };
+        }
       }
-      return tool.execute(toolCallId, normalized ?? args, signal, onUpdate);
+      return tool.execute(toolCallId, argsForExecute, signal, onUpdate);
     },
   };
 }

@@ -32,7 +32,7 @@ describe("wrapToolWorkspaceRootGuardWithOptions", () => {
   });
 
   it("maps container workspace paths to host workspace root", async () => {
-    const { tool } = createToolHarness();
+    const { execute, tool } = createToolHarness();
     const wrapped = wrapToolWorkspaceRootGuardWithOptions(tool, root, {
       containerWorkdir: "/workspace",
     });
@@ -44,6 +44,12 @@ describe("wrapToolWorkspaceRootGuardWithOptions", () => {
       cwd: root,
       root,
     });
+    expect(execute).toHaveBeenCalledWith(
+      "tc1",
+      { path: path.resolve(root, "docs", "readme.md") },
+      undefined,
+      undefined,
+    );
   });
 
   it("maps file:// container workspace paths to host workspace root", async () => {
