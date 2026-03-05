@@ -7,6 +7,7 @@ const discordApiV10 = require("discord-api-types/v10") as DiscordApiV10;
 export const ApplicationCommandOptionType = discordApiV10.ApplicationCommandOptionType;
 export const ButtonStyle = discordApiV10.ButtonStyle;
 export const ChannelType = discordApiV10.ChannelType;
+export const ComponentType = discordApiV10.ComponentType;
 export const MessageFlags = discordApiV10.MessageFlags;
 export const PollLayoutType = discordApiV10.PollLayoutType;
 export const PermissionFlagsBits = discordApiV10.PermissionFlagsBits;

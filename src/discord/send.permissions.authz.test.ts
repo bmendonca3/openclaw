@@ -1,6 +1,6 @@
 import type { RequestClient } from "@buape/carbon";
-import { PermissionFlagsBits, Routes } from "discord-api-types/v10";
 import { describe, expect, it, vi } from "vitest";
+import { PermissionFlagsBits, Routes } from "./api-types-runtime.js";
 import {
   fetchMemberGuildPermissionsDiscord,
   hasAllGuildPermissionsDiscord,

@@ -5,11 +5,11 @@ import type {
   StringSelectMenuInteraction,
 } from "@buape/carbon";
 import type { Client } from "@buape/carbon";
-import type { GatewayPresenceUpdate } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { DiscordAccountConfig } from "../../config/types.discord.js";
 import { buildAgentSessionKey } from "../../routing/resolve-route.js";
+import type { GatewayPresenceUpdate } from "../api-types-runtime.js";
 import {
   clearDiscordComponentEntries,
   registerDiscordComponentEntries,

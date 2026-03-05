@@ -1,5 +1,5 @@
-import { ChannelType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ChannelType } from "../api-types-runtime.js";
 
 const hoisted = vi.hoisted(() => {
   const restGet = vi.fn();

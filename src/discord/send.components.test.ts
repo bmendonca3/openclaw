@@ -1,5 +1,5 @@
-import { ChannelType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ChannelType } from "./api-types-runtime.js";
 import { registerDiscordComponentEntries } from "./components-registry.js";
 import { sendDiscordComponentMessage } from "./send.components.js";
 import { makeDiscordRest } from "./send.test-harness.js";

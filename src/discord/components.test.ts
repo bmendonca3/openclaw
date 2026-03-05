@@ -1,5 +1,5 @@
-import { MessageFlags } from "discord-api-types/v10";
 import { describe, expect, it, beforeEach } from "vitest";
+import { MessageFlags } from "./api-types-runtime.js";
 import {
   clearDiscordComponentEntries,
   registerDiscordComponentEntries,

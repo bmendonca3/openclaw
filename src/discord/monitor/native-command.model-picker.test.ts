@@ -1,4 +1,3 @@
-import { ChannelType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as commandRegistryModule from "../../auto-reply/commands-registry.js";
 import type {
@@ -10,6 +9,7 @@ import * as dispatcherModule from "../../auto-reply/reply/provider-dispatcher.js
 import type { OpenClawConfig } from "../../config/config.js";
 import * as globalsModule from "../../globals.js";
 import * as timeoutModule from "../../utils/with-timeout.js";
+import { ChannelType } from "../api-types-runtime.js";
 import * as modelPickerPreferencesModule from "./model-picker-preferences.js";
 import * as modelPickerModule from "./model-picker.js";
 import { createModelsProviderData as createBaseModelsProviderData } from "./model-picker.test-utils.js";

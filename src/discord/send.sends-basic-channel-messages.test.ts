@@ -1,5 +1,5 @@
-import { ChannelType, PermissionFlagsBits, Routes } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ChannelType, PermissionFlagsBits, Routes } from "./api-types-runtime.js";
 import {
   __resetDiscordDirectoryCacheForTest,
   rememberDiscordDirectoryUser,
