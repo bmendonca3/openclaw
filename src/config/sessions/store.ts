@@ -428,6 +428,11 @@ async function saveSessionStoreUnlocked(
           olderThanMs: maintenance.pruneAfterMs,
           reason: "deleted",
         });
+        await cleanupArchivedSessionTranscripts({
+          directories: targetDirs,
+          olderThanMs: maintenance.pruneAfterMs,
+          reason: "stale",
+        });
         if (maintenance.resetArchiveRetentionMs != null) {
           await cleanupArchivedSessionTranscripts({
             directories: targetDirs,

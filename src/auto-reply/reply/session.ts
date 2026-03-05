@@ -423,7 +423,7 @@ export async function initSessionState(params: {
       storePath,
       sessionFile: archivedSessionEntry.sessionFile,
       agentId,
-      reason: "reset",
+      reason: resetTriggered ? "reset" : "stale",
     });
   }
 

@@ -1100,7 +1100,7 @@ describe("initSessionState preserves behavior overrides across /new and /reset",
       expect.objectContaining({
         sessionId: existingSessionId,
         storePath,
-        reason: "reset",
+        reason: "stale",
       }),
     );
     archiveSpy.mockRestore();
@@ -1175,7 +1175,7 @@ describe("initSessionState preserves behavior overrides across /new and /reset",
       expect.objectContaining({
         sessionId: existingSessionId,
         storePath,
-        reason: "reset",
+        reason: "stale",
       }),
     );
     archiveSpy.mockRestore();
