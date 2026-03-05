@@ -18,6 +18,7 @@ import {
 } from "./app-settings.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
 import type { Tab } from "./navigation.ts";
+import { attachVisualViewportKeyboardInset } from "./visual-viewport.ts";
 
 type LifecycleHost = {
   basePath: string;
@@ -40,6 +41,7 @@ type LifecycleHost = {
   logsEntries: unknown[];
   popStateHandler: () => void;
   topbarObserver: ResizeObserver | null;
+  visualViewportCleanup: (() => void) | null;
 };
 
 export function handleConnected(host: LifecycleHost) {
@@ -50,6 +52,8 @@ export function handleConnected(host: LifecycleHost) {
   syncTabWithLocation(host as unknown as Parameters<typeof syncTabWithLocation>[0], true);
   syncThemeWithSettings(host as unknown as Parameters<typeof syncThemeWithSettings>[0]);
   attachThemeListener(host as unknown as Parameters<typeof attachThemeListener>[0]);
+  host.visualViewportCleanup?.();
+  host.visualViewportCleanup = attachVisualViewportKeyboardInset();
   window.addEventListener("popstate", host.popStateHandler);
   void bootstrapReady.finally(() => {
     if (host.connectGeneration !== connectGeneration) {
@@ -80,6 +84,8 @@ export function handleDisconnected(host: LifecycleHost) {
   host.client = null;
   host.connected = false;
   detachThemeListener(host as unknown as Parameters<typeof detachThemeListener>[0]);
+  host.visualViewportCleanup?.();
+  host.visualViewportCleanup = null;
   host.topbarObserver?.disconnect();
   host.topbarObserver = null;
 }

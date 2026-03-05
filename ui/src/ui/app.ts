@@ -395,6 +395,7 @@ export class OpenClawApp extends LitElement {
   private themeMedia: MediaQueryList | null = null;
   private themeMediaHandler: ((event: MediaQueryListEvent) => void) | null = null;
   private topbarObserver: ResizeObserver | null = null;
+  private visualViewportCleanup: (() => void) | null = null;
 
   createRenderRoot() {
     return this;

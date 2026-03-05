@@ -141,13 +141,13 @@
 /* Chat compose - sticky at bottom */
 .chat-compose {
   position: sticky;
-  bottom: 0;
+  bottom: var(--chat-viewport-keyboard-inset, 0px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-top: auto; /* Push to bottom of flex container */
-  padding: 12px 4px 4px;
+  padding: 12px 4px calc(4px + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to bottom, transparent, var(--bg) 20%);
   z-index: 10;
 }
