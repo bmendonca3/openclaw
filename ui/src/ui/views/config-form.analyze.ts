@@ -129,8 +129,13 @@ function isSecretRefVariant(entry: JsonSchema): boolean {
   if (!source || !provider || !id) {
     return false;
   }
+  const hasStringConstSource = typeof source.const === "string";
+  const hasStringEnumSource =
+    Array.isArray(source.enum) &&
+    source.enum.length > 0 &&
+    source.enum.every((item) => typeof item === "string");
   return (
-    typeof source.const === "string" &&
+    (hasStringConstSource || hasStringEnumSource) &&
     schemaType(provider) === "string" &&
     schemaType(id) === "string"
   );
@@ -155,7 +160,10 @@ function normalizeSecretInputUnion(
     return null;
   }
   const nonString = remaining.filter((_, index) => index !== stringIndex);
-  if (nonString.length !== 1 || !isSecretRefUnion(nonString[0])) {
+  if (
+    nonString.length !== 1 ||
+    (!isSecretRefUnion(nonString[0]) && !isSecretRefVariant(nonString[0]))
+  ) {
     return null;
   }
   return normalizeSchemaNode(
