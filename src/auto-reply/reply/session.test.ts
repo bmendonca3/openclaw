@@ -1135,6 +1135,51 @@ describe("initSessionState preserves behavior overrides across /new and /reset",
     expect(result.sessionEntry.verboseLevel).toBeUndefined();
     expect(result.sessionEntry.thinkingLevel).toBeUndefined();
   });
+
+  it("archives the previous transcript when session freshness starts a new session", async () => {
+    const storePath = await createStorePath("openclaw-archive-stale-session-");
+    const sessionKey = "agent:main:telegram:dm:user-stale-archive";
+    const existingSessionId = "existing-stale-session";
+    await seedSessionStoreWithOverrides({
+      storePath,
+      sessionKey,
+      sessionId: existingSessionId,
+      overrides: { updatedAt: 1, verboseLevel: "on" },
+    });
+    const sessionUtils = await import("../../gateway/session-utils.fs.js");
+    const archiveSpy = vi.spyOn(sessionUtils, "archiveSessionTranscripts");
+
+    const cfg = {
+      session: { store: storePath, idleMinutes: 0 },
+    } as OpenClawConfig;
+
+    const result = await initSessionState({
+      ctx: {
+        Body: "hello again",
+        RawBody: "hello again",
+        CommandBody: "hello again",
+        From: "user-stale-archive",
+        To: "bot",
+        ChatType: "direct",
+        SessionKey: sessionKey,
+        Provider: "telegram",
+        Surface: "telegram",
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(result.isNewSession).toBe(true);
+    expect(result.resetTriggered).toBe(false);
+    expect(archiveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: existingSessionId,
+        storePath,
+        reason: "reset",
+      }),
+    );
+    archiveSpy.mockRestore();
+  });
 });
 
 describe("buildQueuedSystemPrompt", () => {

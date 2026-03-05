@@ -242,6 +242,10 @@ export async function initSessionState(params: {
       persistedLabel = entry.label;
     }
   }
+  const archivedSessionEntry =
+    entry && isNewSession && entry.sessionId && entry.sessionId !== sessionId
+      ? { ...entry }
+      : undefined;
 
   const baseEntry = !isNewSession && freshEntry ? entry : undefined;
   // Track the originating channel/to for announce routing (subagent announce-back).
@@ -413,11 +417,11 @@ export async function initSessionState(params: {
   );
 
   // Archive old transcript so it doesn't accumulate on disk (#14869).
-  if (previousSessionEntry?.sessionId) {
+  if (archivedSessionEntry?.sessionId) {
     archiveSessionTranscripts({
-      sessionId: previousSessionEntry.sessionId,
+      sessionId: archivedSessionEntry.sessionId,
       storePath,
-      sessionFile: previousSessionEntry.sessionFile,
+      sessionFile: archivedSessionEntry.sessionFile,
       agentId,
       reason: "reset",
     });
