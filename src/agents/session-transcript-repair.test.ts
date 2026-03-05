@@ -435,6 +435,45 @@ describe("sanitizeToolCallInputs", () => {
     const attachments = (inputObj.attachments ?? []) as Array<Record<string, unknown>>;
     expect(attachments[0]?.content).toBe("__OPENCLAW_REDACTED__");
   });
+
+  it("redacts path-like arguments for write and message tool calls", () => {
+    const input = castAgentMessages([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call_write",
+            name: "write",
+            arguments: { path: "/tmp/secret.txt", content: "keep body" },
+          },
+          {
+            type: "toolUse",
+            id: "call_message",
+            name: "message",
+            input: {
+              to: "telegram:123",
+              filePath: "/tmp/secret.txt",
+              attachments: [{ file: "/tmp/another-secret.png" }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const out = sanitizeToolCallInputs(input);
+    const toolCalls = getAssistantToolCallBlocks(out) as Array<Record<string, unknown>>;
+
+    expect(toolCalls).toHaveLength(2);
+    expect((toolCalls[0]?.arguments as Record<string, unknown>)?.path).toBe(
+      "__OPENCLAW_REDACTED_PATH__",
+    );
+    expect((toolCalls[0]?.arguments as Record<string, unknown>)?.content).toBe("keep body");
+    const messageInput = (toolCalls[1]?.input ?? {}) as Record<string, unknown>;
+    expect(messageInput.filePath).toBe("__OPENCLAW_REDACTED_PATH__");
+    const attachments = (messageInput.attachments ?? []) as Array<Record<string, unknown>>;
+    expect(attachments[0]?.file).toBe("__OPENCLAW_REDACTED_PATH__");
+  });
   it("preserves other block properties when trimming tool names", () => {
     const toolCalls = sanitizeAssistantToolCalls([
       { type: "toolCall", id: "call_1", name: " read ", arguments: { path: "/tmp/test" } },

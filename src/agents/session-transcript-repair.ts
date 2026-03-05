@@ -95,6 +95,55 @@ function redactSessionsSpawnAttachmentsArgs(value: unknown): unknown {
   return { ...rec, attachments: next };
 }
 
+const REDACTED_PATH_VALUE = "__OPENCLAW_REDACTED_PATH__";
+
+function isPathLikeKey(key: string): boolean {
+  const normalized = key.trim().toLowerCase();
+  return (
+    normalized === "path" ||
+    normalized === "file" ||
+    normalized === "filepath" ||
+    normalized.endsWith("path") ||
+    normalized.endsWith("file") ||
+    normalized.endsWith("filepath")
+  );
+}
+
+function redactPathLikeFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map((item) => {
+      const redacted = redactPathLikeFields(item);
+      if (redacted !== item) {
+        changed = true;
+      }
+      return redacted;
+    });
+    return changed ? next : value;
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(record)) {
+    if (typeof child === "string" && isPathLikeKey(key)) {
+      next[key] = REDACTED_PATH_VALUE;
+      if (child !== REDACTED_PATH_VALUE) {
+        changed = true;
+      }
+      continue;
+    }
+    const redactedChild = redactPathLikeFields(child);
+    if (redactedChild !== child) {
+      changed = true;
+    }
+    next[key] = redactedChild;
+  }
+  return changed ? next : value;
+}
+
 function sanitizeToolCallBlock(block: RawToolCallBlock): RawToolCallBlock {
   const rawName = typeof block.name === "string" ? block.name : undefined;
   const trimmedName = rawName?.trim();
@@ -102,19 +151,14 @@ function sanitizeToolCallBlock(block: RawToolCallBlock): RawToolCallBlock {
   const normalizedName = hasTrimmedName ? trimmedName : undefined;
   const nameChanged = hasTrimmedName && rawName !== trimmedName;
 
-  const isSessionsSpawn = normalizedName?.toLowerCase() === "sessions_spawn";
-
-  if (!isSessionsSpawn) {
-    if (!nameChanged) {
-      return block;
-    }
-    return { ...(block as Record<string, unknown>), name: normalizedName } as RawToolCallBlock;
-  }
-
-  // Redact large/sensitive inline attachment content from persisted transcripts.
-  // Apply redaction to both `.arguments` and `.input` properties since block structures can vary
-  const nextArgs = redactSessionsSpawnAttachmentsArgs(block.arguments);
-  const nextInput = redactSessionsSpawnAttachmentsArgs(block.input);
+  const lowerName = normalizedName?.toLowerCase();
+  const shouldRedactPathArgs = lowerName === "write" || lowerName === "message";
+  const nextArgs = shouldRedactPathArgs
+    ? redactPathLikeFields(block.arguments)
+    : redactSessionsSpawnAttachmentsArgs(block.arguments);
+  const nextInput = shouldRedactPathArgs
+    ? redactPathLikeFields(block.input)
+    : redactSessionsSpawnAttachmentsArgs(block.input);
   if (nextArgs === block.arguments && nextInput === block.input && !nameChanged) {
     return block;
   }
@@ -259,35 +303,12 @@ export function repairToolCallInputs(
           (block as { type?: unknown }).type === "toolUse" ||
           (block as { type?: unknown }).type === "functionCall"
         ) {
-          // Only sanitize (redact) sessions_spawn blocks; all others are passed through
-          // unchanged to preserve provider-specific shapes (e.g. toolUse.input for Anthropic).
-          const blockName =
-            typeof (block as { name?: unknown }).name === "string"
-              ? (block as { name: string }).name.trim()
-              : undefined;
-          if (blockName?.toLowerCase() === "sessions_spawn") {
-            const sanitized = sanitizeToolCallBlock(block);
-            if (sanitized !== block) {
-              changed = true;
-              messageChanged = true;
-            }
-            nextContent.push(sanitized as typeof block);
-          } else {
-            if (typeof (block as { name?: unknown }).name === "string") {
-              const rawName = (block as { name: string }).name;
-              const trimmedName = rawName.trim();
-              if (rawName !== trimmedName && trimmedName) {
-                const renamed = { ...(block as object), name: trimmedName } as typeof block;
-                nextContent.push(renamed);
-                changed = true;
-                messageChanged = true;
-              } else {
-                nextContent.push(block);
-              }
-            } else {
-              nextContent.push(block);
-            }
+          const sanitized = sanitizeToolCallBlock(block);
+          if (sanitized !== block) {
+            changed = true;
+            messageChanged = true;
           }
+          nextContent.push(sanitized as typeof block);
           continue;
         }
       } else {
