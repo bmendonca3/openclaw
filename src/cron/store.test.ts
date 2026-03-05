@@ -6,6 +6,11 @@ import { loadCronStore, resolveCronStorePath, saveCronStore } from "./store.js";
 import type { CronStoreFile } from "./types.js";
 
 const { makeStorePath } = createCronStoreHarness({ prefix: "openclaw-cron-store-" });
+const isPosix = process.platform !== "win32";
+
+async function getModeBits(filePath: string) {
+  return (await fs.stat(filePath)).mode & 0o777;
+}
 
 function makeStore(jobId: string, enabled: boolean): CronStoreFile {
   const now = Date.now();
@@ -78,6 +83,19 @@ describe("cron store", () => {
     const backupRaw = await fs.readFile(`${store.storePath}.bak`, "utf-8");
     expect(JSON.parse(currentRaw)).toEqual(second);
     expect(JSON.parse(backupRaw)).toEqual(first);
+  });
+
+  it.skipIf(!isPosix)("writes cron store + backup with private permissions", async () => {
+    const store = await makeStorePath();
+    const first = makeStore("job-1", true);
+    const second = makeStore("job-2", false);
+
+    await saveCronStore(store.storePath, first);
+    await saveCronStore(store.storePath, second);
+
+    expect(await getModeBits(path.dirname(store.storePath))).toBe(0o700);
+    expect(await getModeBits(store.storePath)).toBe(0o600);
+    expect(await getModeBits(`${store.storePath}.bak`)).toBe(0o600);
   });
 });
 

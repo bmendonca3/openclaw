@@ -9,6 +9,17 @@ import type { CronStoreFile } from "./types.js";
 export const DEFAULT_CRON_DIR = path.join(CONFIG_DIR, "cron");
 export const DEFAULT_CRON_STORE_PATH = path.join(DEFAULT_CRON_DIR, "jobs.json");
 const serializedStoreCache = new Map<string, string>();
+const CRON_DIR_MODE = 0o700;
+const CRON_FILE_MODE = 0o600;
+
+async function ensureCronDir(dirPath: string) {
+  await fs.promises.mkdir(dirPath, { recursive: true, mode: CRON_DIR_MODE });
+  await fs.promises.chmod(dirPath, CRON_DIR_MODE).catch(() => undefined);
+}
+
+async function ensureCronFileMode(filePath: string) {
+  await fs.promises.chmod(filePath, CRON_FILE_MODE).catch(() => undefined);
+}
 
 export function resolveCronStorePath(storePath?: string) {
   if (storePath?.trim()) {
@@ -61,7 +72,7 @@ export async function saveCronStore(
   store: CronStoreFile,
   opts?: SaveCronStoreOptions,
 ) {
-  await fs.promises.mkdir(path.dirname(storePath), { recursive: true });
+  await ensureCronDir(path.dirname(storePath));
   const json = JSON.stringify(store, null, 2);
   const cached = serializedStoreCache.get(storePath);
   if (cached === json) {
@@ -83,15 +94,17 @@ export async function saveCronStore(
     return;
   }
   const tmp = `${storePath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
-  await fs.promises.writeFile(tmp, json, "utf-8");
+  await fs.promises.writeFile(tmp, json, { encoding: "utf-8", mode: CRON_FILE_MODE });
   if (previous !== null && !opts?.skipBackup) {
     try {
       await fs.promises.copyFile(storePath, `${storePath}.bak`);
+      await ensureCronFileMode(`${storePath}.bak`);
     } catch {
       // best-effort
     }
   }
   await renameWithRetry(tmp, storePath);
+  await ensureCronFileMode(storePath);
   serializedStoreCache.set(storePath, json);
 }
 
@@ -112,6 +125,7 @@ async function renameWithRetry(src: string, dest: string): Promise<void> {
       // Windows doesn't reliably support atomic replace via rename when dest exists.
       if (code === "EPERM" || code === "EEXIST") {
         await fs.promises.copyFile(src, dest);
+        await ensureCronFileMode(dest);
         await fs.promises.unlink(src).catch(() => {});
         return;
       }

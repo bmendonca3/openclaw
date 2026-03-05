@@ -50,6 +50,18 @@ type ReadCronRunLogAllPageOptions = Omit<ReadCronRunLogPageOptions, "jobId"> & {
   jobNameById?: Record<string, string>;
 };
 
+const CRON_RUNS_DIR_MODE = 0o700;
+const CRON_RUN_LOG_FILE_MODE = 0o600;
+
+async function ensureCronRunsDir(dirPath: string) {
+  await fs.mkdir(dirPath, { recursive: true, mode: CRON_RUNS_DIR_MODE });
+  await fs.chmod(dirPath, CRON_RUNS_DIR_MODE).catch(() => undefined);
+}
+
+async function ensureCronRunLogFileMode(filePath: string) {
+  await fs.chmod(filePath, CRON_RUN_LOG_FILE_MODE).catch(() => undefined);
+}
+
 function assertSafeCronRunLogJobId(jobId: string): string {
   const trimmed = jobId.trim();
   if (!trimmed) {
@@ -125,8 +137,12 @@ async function pruneIfNeeded(filePath: string, opts: { maxBytes: number; keepLin
   const kept = lines.slice(Math.max(0, lines.length - opts.keepLines));
   const { randomBytes } = await import("node:crypto");
   const tmp = `${filePath}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
-  await fs.writeFile(tmp, `${kept.join("\n")}\n`, "utf-8");
+  await fs.writeFile(tmp, `${kept.join("\n")}\n`, {
+    encoding: "utf-8",
+    mode: CRON_RUN_LOG_FILE_MODE,
+  });
   await fs.rename(tmp, filePath);
+  await ensureCronRunLogFileMode(filePath);
 }
 
 export async function appendCronRunLog(
@@ -139,8 +155,9 @@ export async function appendCronRunLog(
   const next = prev
     .catch(() => undefined)
     .then(async () => {
-      await fs.mkdir(path.dirname(resolved), { recursive: true });
+      await ensureCronRunsDir(path.dirname(resolved));
       await fs.appendFile(resolved, `${JSON.stringify(entry)}\n`, "utf-8");
+      await ensureCronRunLogFileMode(resolved);
       await pruneIfNeeded(resolved, {
         maxBytes: opts?.maxBytes ?? DEFAULT_CRON_RUN_LOG_MAX_BYTES,
         keepLines: opts?.keepLines ?? DEFAULT_CRON_RUN_LOG_KEEP_LINES,

@@ -12,6 +12,8 @@ import {
   resolveCronRunLogPath,
 } from "./run-log.js";
 
+const isPosix = process.platform !== "win32";
+
 describe("cron run log", () => {
   it("resolves prune options from config with defaults", () => {
     expect(resolveCronRunLogPruneOptions()).toEqual({
@@ -92,6 +94,22 @@ describe("cron run log", () => {
       expect(lines.length).toBe(3);
       const last = JSON.parse(lines[2] ?? "{}") as { ts?: number };
       expect(last.ts).toBe(1009);
+    });
+  });
+
+  it.skipIf(!isPosix)("creates private run-log files and runs dir", async () => {
+    await withRunLogDir("openclaw-cron-log-mode-", async (dir) => {
+      const logPath = path.join(dir, "runs", "job-1.jsonl");
+
+      await appendCronRunLog(logPath, {
+        ts: 1,
+        jobId: "job-1",
+        action: "finished",
+        status: "ok",
+      });
+
+      expect((await fs.stat(path.dirname(logPath))).mode & 0o777).toBe(0o700);
+      expect((await fs.stat(logPath)).mode & 0o777).toBe(0o600);
     });
   });
 
