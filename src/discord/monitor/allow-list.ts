@@ -386,19 +386,18 @@ function hasConfiguredDiscordChannels(
   return Boolean(channels && Object.keys(channels).length > 0);
 }
 
-function hasExplicitAllowFlag(entry: DiscordChannelEntry | undefined): boolean {
-  return Boolean(
-    entry && Object.prototype.hasOwnProperty.call(entry, "allow") && entry.allow !== undefined,
-  );
-}
-
 export function isDiscordChannelAllowlistConfigured(
   channels: DiscordGuildEntryResolved["channels"] | undefined,
 ): boolean {
   if (!hasConfiguredDiscordChannels(channels)) {
     return false;
   }
-  return Object.values(channels).some((entry) => hasExplicitAllowFlag(entry));
+  return Object.values(channels).some((entry) => {
+    if (!entry) {
+      return false;
+    }
+    return Object.entries(entry).some(([key, value]) => key !== "allow" || value !== undefined);
+  });
 }
 
 function resolveDiscordChannelConfigEntry(

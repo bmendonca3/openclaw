@@ -611,11 +611,11 @@ describe("discord groupPolicy gating", () => {
     }
   });
 
-  it("keeps guild open when channel entries only add prompts", () => {
+  it("treats prompt-only channel entries as an allowlist under allowlist mode", () => {
     const channelAllowlistConfigured = isDiscordChannelAllowlistConfigured({
       coder: { systemPrompt: "Use short answers." },
     });
-    expect(channelAllowlistConfigured).toBe(false);
+    expect(channelAllowlistConfigured).toBe(true);
     expect(
       isDiscordGroupAllowedByPolicy({
         groupPolicy: "allowlist",
@@ -623,7 +623,7 @@ describe("discord groupPolicy gating", () => {
         channelAllowlistConfigured,
         channelAllowed: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("treats explicit allow flags as channel allowlist entries", () => {

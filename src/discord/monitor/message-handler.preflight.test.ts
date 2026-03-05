@@ -728,7 +728,7 @@ describe("preflightDiscordMessage", () => {
     expect(result?.hasAnyMention).toBe(false);
   });
 
-  it("allows unlisted guild channels when only systemPrompt channel entries exist", async () => {
+  it("blocks unlisted guild channels when any channel entries exist under allowlist mode", async () => {
     const channelId = "channel-systemprompt-fallback-1";
     const guildId = "guild-systemprompt-fallback-1";
     const client = {
@@ -804,7 +804,7 @@ describe("preflightDiscordMessage", () => {
       client,
     });
 
-    expect(result).not.toBeNull();
+    expect(result).toBeNull();
   });
 
   it("uses attachment content_type for guild audio preflight mention detection", async () => {
