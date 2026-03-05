@@ -34,10 +34,12 @@ import { getDiscordRuntime } from "./runtime.js";
 
 const meta = getChatChannelMeta("discord");
 
-function resolveDiscordOutboundTarget(params: {
+async function resolveDiscordOutboundTarget(params: {
   to: string;
   threadId?: string | number | null;
-}): string {
+  cfg: Parameters<NonNullable<typeof discordPlugin.outbound>["sendText"]>[0]["cfg"];
+  accountId?: string | null;
+}): Promise<string> {
   if (params.threadId == null) {
     return params.to;
   }
@@ -45,7 +47,38 @@ function resolveDiscordOutboundTarget(params: {
   if (!threadId) {
     return params.to;
   }
+  const parentChannelId = resolveDiscordParentChannelId(params.to);
+  const fetchChannel = getDiscordRuntime().channel.discord.fetchChannel;
+  if (!fetchChannel) {
+    throw new Error("Discord thread routing requires fetchChannel support");
+  }
+  const thread = await fetchChannel(threadId, {
+    cfg: params.cfg,
+    accountId: params.accountId ?? undefined,
+  });
+  const parentId = typeof thread?.parent_id === "string" ? thread.parent_id.trim() : "";
+  if (!parentId || parentId !== parentChannelId) {
+    throw new Error("Discord threadId must belong to the provided parent channel");
+  }
   return `channel:${threadId}`;
+}
+
+function resolveDiscordParentChannelId(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error("Discord channel id is required");
+  }
+  if (trimmed.startsWith("channel:")) {
+    const channelId = trimmed.slice("channel:".length).trim();
+    if (!channelId) {
+      throw new Error("Discord channel id is required");
+    }
+    return channelId;
+  }
+  if (trimmed.startsWith("user:")) {
+    throw new Error("Discord threadId requires a channel target");
+  }
+  return trimmed;
 }
 
 const discordMessageActions: ChannelMessageActionAdapter = {
@@ -318,13 +351,17 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
     resolveTarget: ({ to }) => normalizeDiscordOutboundTarget(to),
     sendText: async ({ cfg, to, text, accountId, deps, replyToId, threadId, silent }) => {
       const send = deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
-      const result = await send(resolveDiscordOutboundTarget({ to, threadId }), text, {
-        verbose: false,
-        cfg,
-        replyTo: replyToId ?? undefined,
-        accountId: accountId ?? undefined,
-        silent: silent ?? undefined,
-      });
+      const result = await send(
+        await resolveDiscordOutboundTarget({ to, threadId, cfg, accountId }),
+        text,
+        {
+          verbose: false,
+          cfg,
+          replyTo: replyToId ?? undefined,
+          accountId: accountId ?? undefined,
+          silent: silent ?? undefined,
+        },
+      );
       return { channel: "discord", ...result };
     },
     sendMedia: async ({
@@ -340,20 +377,24 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
       silent,
     }) => {
       const send = deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
-      const result = await send(resolveDiscordOutboundTarget({ to, threadId }), text, {
-        verbose: false,
-        cfg,
-        mediaUrl,
-        mediaLocalRoots,
-        replyTo: replyToId ?? undefined,
-        accountId: accountId ?? undefined,
-        silent: silent ?? undefined,
-      });
+      const result = await send(
+        await resolveDiscordOutboundTarget({ to, threadId, cfg, accountId }),
+        text,
+        {
+          verbose: false,
+          cfg,
+          mediaUrl,
+          mediaLocalRoots,
+          replyTo: replyToId ?? undefined,
+          accountId: accountId ?? undefined,
+          silent: silent ?? undefined,
+        },
+      );
       return { channel: "discord", ...result };
     },
     sendPoll: async ({ cfg, to, poll, accountId, threadId, silent }) =>
       await getDiscordRuntime().channel.discord.sendPollDiscord(
-        resolveDiscordOutboundTarget({ to, threadId }),
+        await resolveDiscordOutboundTarget({ to, threadId, cfg, accountId }),
         poll,
         {
           cfg,

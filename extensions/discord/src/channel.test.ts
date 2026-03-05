@@ -36,9 +36,11 @@ describe("discordPlugin outbound", () => {
 
   it("routes sendText to thread target when threadId is provided", async () => {
     const sendMessageDiscord = vi.fn(async () => ({ messageId: "m-thread-text" }));
+    const fetchChannel = vi.fn(async () => ({ parent_id: "parent-1" }));
     setDiscordRuntime({
       channel: {
         discord: {
+          fetchChannel,
           sendMessageDiscord,
         },
       },
@@ -62,9 +64,11 @@ describe("discordPlugin outbound", () => {
 
   it("routes sendMedia to thread target when threadId is provided", async () => {
     const sendMessageDiscord = vi.fn(async () => ({ messageId: "m-thread-media" }));
+    const fetchChannel = vi.fn(async () => ({ parent_id: "parent-2" }));
     setDiscordRuntime({
       channel: {
         discord: {
+          fetchChannel,
           sendMessageDiscord,
         },
       },
@@ -92,9 +96,11 @@ describe("discordPlugin outbound", () => {
 
   it("routes sendPoll to thread target when threadId is provided", async () => {
     const sendPollDiscord = vi.fn(async () => ({ messageId: "m-thread-poll" }));
+    const fetchChannel = vi.fn(async () => ({ parent_id: "parent-3" }));
     setDiscordRuntime({
       channel: {
         discord: {
+          fetchChannel,
           sendPollDiscord,
         },
       },
@@ -119,5 +125,29 @@ describe("discordPlugin outbound", () => {
       expect.objectContaining({ accountId: "work" }),
     );
     expect(result).toMatchObject({ messageId: "m-thread-poll" });
+  });
+
+  it("rejects thread targets that do not belong to the provided parent channel", async () => {
+    const sendMessageDiscord = vi.fn(async () => ({ messageId: "m-thread-text" }));
+    const fetchChannel = vi.fn(async () => ({ parent_id: "other-parent" }));
+    setDiscordRuntime({
+      channel: {
+        discord: {
+          fetchChannel,
+          sendMessageDiscord,
+        },
+      },
+    } as unknown as PluginRuntime);
+
+    await expect(
+      discordPlugin.outbound!.sendText!({
+        cfg: {} as OpenClawConfig,
+        to: "channel:parent-1",
+        text: "hello thread",
+        threadId: "thread-1",
+        accountId: "work",
+      }),
+    ).rejects.toThrow(/threadId must belong/i);
+    expect(sendMessageDiscord).not.toHaveBeenCalled();
   });
 });
