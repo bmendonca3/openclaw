@@ -109,7 +109,7 @@ function stripTokenAtEdges(raw: string): { text: string; didStrip: boolean } {
 
 export function stripHeartbeatToken(
   raw?: string,
-  opts: { mode?: StripHeartbeatMode; maxAckChars?: number } = {},
+  opts: { mode?: StripHeartbeatMode; maxAckChars?: number | string } = {},
 ) {
   if (!raw) {
     return { shouldSkip: true, text: "", didStrip: false };

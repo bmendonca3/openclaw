@@ -70,8 +70,11 @@ function shouldSuppressHistoryMessage(
   if (!text) {
     return false;
   }
-  if (isHeartbeatPollHistoryText(text)) {
+  if (role === "user" && isHeartbeatPollHistoryText(text)) {
     return true;
+  }
+  if (role === "assistant" && isHeartbeatPollHistoryText(text)) {
+    return false;
   }
   return role === "assistant" && isHeartbeatAckOnlyHistoryText(text, heartbeatAckMaxChars);
 }
