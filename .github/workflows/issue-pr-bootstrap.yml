@@ -1,0 +1,141 @@
+name: Issue PR bootstrap
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: issue-pr-bootstrap-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: write
+    steps:
+      - name: Create issue branch and draft PR
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!issue || issue.pull_request) {
+              core.info("No issue payload (or payload is a PR), skipping.");
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const baseBranch = "main";
+            const branchName = `issue-${issue.number}`;
+            const issueTitle = issue.title ?? "";
+            const issueBody = (issue.body ?? "").trim() || "_No description provided._";
+            const issueUrl = issue.html_url;
+            const prTitle = `[Issue #${issue.number}] ${issueTitle}`;
+            const prBody = [
+              "## Original Issue",
+              `- Number: #${issue.number}`,
+              `- Title: ${issueTitle}`,
+              `- URL: ${issueUrl}`,
+              "",
+              "## Description",
+              issueBody,
+              "",
+              `Closes #${issue.number}`,
+            ].join("\n");
+
+            core.info(`Processing issue #${issue.number}: ${issueTitle}`);
+            core.info(`Target branch: ${branchName}`);
+
+            let baseRef;
+            try {
+              baseRef = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${baseBranch}`,
+              });
+            } catch (error) {
+              core.setFailed(
+                `Could not locate base branch "${baseBranch}". ` +
+                  `Ensure the repository has a "${baseBranch}" branch.`,
+              );
+              return;
+            }
+
+            let branchRef;
+            try {
+              branchRef = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${branchName}`,
+              });
+              core.info(`Branch ${branchName} already exists.`);
+            } catch (error) {
+              if (error?.status !== 404) {
+                throw error;
+              }
+
+              core.info(`Creating branch ${branchName} from ${baseBranch}.`);
+              branchRef = await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/heads/${branchName}`,
+                sha: baseRef.data.object.sha,
+              });
+            }
+
+            const existingPrs = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: "all",
+              base: baseBranch,
+              head: `${owner}:${branchName}`,
+              per_page: 100,
+            });
+            if (existingPrs.length > 0) {
+              core.info(
+                `PR already exists for ${branchName}: #${existingPrs[0].number}. Skipping PR creation.`,
+              );
+              return;
+            }
+
+            // GitHub requires commits ahead of base before a PR can be created.
+            if (branchRef.data.object.sha === baseRef.data.object.sha) {
+              core.info("Branch matches main; creating bootstrap commit.");
+              const baseCommit = await github.rest.git.getCommit({
+                owner,
+                repo,
+                commit_sha: baseRef.data.object.sha,
+              });
+              const bootstrapCommit = await github.rest.git.createCommit({
+                owner,
+                repo,
+                message: `chore: bootstrap issue #${issue.number}`,
+                tree: baseCommit.data.tree.sha,
+                parents: [baseRef.data.object.sha],
+              });
+              await github.rest.git.updateRef({
+                owner,
+                repo,
+                ref: `heads/${branchName}`,
+                sha: bootstrapCommit.data.sha,
+                force: true,
+              });
+            }
+
+            const pullRequest = await github.rest.pulls.create({
+              owner,
+              repo,
+              title: prTitle,
+              head: branchName,
+              base: baseBranch,
+              body: prBody,
+              draft: true,
+            });
+
+            core.info(`Created draft PR #${pullRequest.data.number}: ${pullRequest.data.html_url}`);
